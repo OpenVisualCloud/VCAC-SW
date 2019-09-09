@@ -1,0 +1,11 @@
+#
+# Makefile - Intel VCA Linux driver.
+# Copyright(c) 2016, Intel Corporation.
+#
+subdir-ccflags-y += -I$(M)/vca/blockio/
+subdir-ccflags-y += -I$(M)/vca/plx87xx/
+
+obj-m := vcablkfe.o vcablk_bckend.o
+
+vcablkfe-objs += vcablk/vcablk.o vcablk/vcablk_disk.o hal_pci/vcablk_hal_pci.o
+vcablk_bckend-objs += vcablk_bcknd/vcablk_bcknd.o vcablk_bcknd/vcablk_bcknd_disk.o vcablk_bcknd/vcablk_bcknd_media.o hal_pci/vcablk_bcknd_hal_pci.o

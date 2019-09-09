@@ -1,0 +1,58 @@
+From b4cc159d70491f2e57a9c76db6add24bcc42ecae Mon Sep 17 00:00:00 2001
+From: Adam Rutkowski <adam.j.rutkowski@intel.com>
+Date: Wed, 26 Aug 2015 07:05:05 -0400
+Subject: [PATCH 04/16] Allow PCI passtrough for BDW graphics despite RMRR
+ usage
+
+Broadwell GPU drivers for both Windows and Linux are capable of working in
+"universal passthrough" mode where standard PCI passhtorugh of GPU device
+is enough for the guest to handle GPU device. Thus we assume RMRR space is
+not required for this devices. For now enabling this for VCA GPU device
+only as we haven't tested other devices.
+
+Signed-off-by: Adam Rutkowski <adam.j.rutkowski@intel.com>
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+---
+ drivers/iommu/intel-iommu.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/intel-iommu.c b/drivers/iommu/intel-iommu.c
+index 83f3d48..b482d4f 100644
+--- a/drivers/iommu/intel-iommu.c
++++ b/drivers/iommu/intel-iommu.c
+@@ -59,6 +59,7 @@
+ #define IS_USB_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_SERIAL_USB)
+ #define IS_ISA_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_BRIDGE_ISA)
+ #define IS_AZALIA(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x3a3e)
++#define IS_VCA_GPU(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x162a)
+ 
+ #define IOAPIC_RANGE_START	(0xfee00000)
+ #define IOAPIC_RANGE_END	(0xfeefffff)
+@@ -2866,6 +2867,13 @@ static bool device_has_rmrr(struct device *dev)
+  * The same exception is made for graphics devices, with the requirement that
+  * any use of the RMRR regions will be torn down before assigning the device
+  * to a guest.
++ *
++ * Broadwell GPU drivers for both Windows and Linux are capable of working in
++ * "universal passthrough" mode where standard PCI passhtorugh of GPU device
++ * is enough for the guest to handle GPU device. Thus we assume RMRR space is
++ * not required for this devices. For now enabling this for VCA GPU device
++ * only as we haven't tested other devices.
++ *
+  */
+ static bool device_is_rmrr_locked(struct device *dev)
+ {
+@@ -2875,7 +2883,7 @@ static bool device_is_rmrr_locked(struct device *dev)
+ 	if (dev_is_pci(dev)) {
+ 		struct pci_dev *pdev = to_pci_dev(dev);
+ 
+-		if (IS_USB_DEVICE(pdev) || IS_GFX_DEVICE(pdev))
++		if (IS_USB_DEVICE(pdev) || IS_GFX_DEVICE(pdev) || IS_VCA_GPU(pdev))
+ 			return false;
+ 	}
+ 
+-- 
+2.7.4
+

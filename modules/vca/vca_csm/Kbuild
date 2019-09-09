@@ -1,0 +1,8 @@
+#
+# Makefile - Intel VCA card state management driver
+# Copyright(c) 2015, Intel Corporation.
+#
+obj-m := vca_csm.o
+
+vca_csm-objs += vca_csm_main.o
+vca_csm-objs += vca_csm_sysfs.o

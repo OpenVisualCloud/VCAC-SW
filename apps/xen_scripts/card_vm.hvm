@@ -1,0 +1,17 @@
+builder = 'hvm'
+kernel = 'hvmloader'
+memory = 3072
+vcpus = 6
+cpus = "2,3,4,5,6,7"
+name = "vca_centos"
+boot = "c"
+xen_platform_pci=1
+device_model_version='qemu-xen-traditional'
+sdl=0
+tsc_mode=0
+usb=1
+keymap='en-us'
+serial='pty'
+vnc=1
+vnclisten='0.0.0.0'
+vncpasswd=''

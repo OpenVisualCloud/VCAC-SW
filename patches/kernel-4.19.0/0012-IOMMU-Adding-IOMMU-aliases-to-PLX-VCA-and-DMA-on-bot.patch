@@ -1,0 +1,52 @@
+From 6aab842eeb8508e17d67e28e69a08ad6aac03dc8 Mon Sep 17 00:00:00 2001
+From: Piotr Zawieracz <piotr.zawieracz@intel.com>
+Date: Fri, 21 Sep 2018 15:55:12 +0200
+Subject: [PATCH 12/12] IOMMU: Adding IOMMU aliases to PLX VCA and DMA on both
+ sides.
+
+_
+---
+ drivers/pci/quirks.c | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/drivers/pci/quirks.c b/drivers/pci/quirks.c
+index 6bc27b7fd..7d803baee 100644
+--- a/drivers/pci/quirks.c
++++ b/drivers/pci/quirks.c
+@@ -3962,6 +3962,33 @@ static void quirk_mic_x200_dma_alias(struct pci_dev *pdev)
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2260, quirk_mic_x200_dma_alias);
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2264, quirk_mic_x200_dma_alias);
+ 
++
++/*
++ * VCA NTB forwards PCIe traffic using multiple alien RIDs. They have to
++ * be added as aliases to the DMA device in order to allow buffer access
++ * when IOMMU is enabled. Following devfns have to match RIT-LUT table
++ * programmed in the EEPROM.
++ */
++static void quirk_plx_vca_alias(struct pci_dev *pdev)
++{
++	const unsigned num_pci_slots = 0x20;
++	unsigned int slot;
++	for (slot = 0; slot < num_pci_slots; slot++) {
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x0));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x1));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x2));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x3));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x4));
++	}
++}
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2954, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2955, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2956, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2958, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2959, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x295A, quirk_plx_vca_alias);
++
++
+ /*
+  * The IOMMU and interrupt controller on Broadcom Vulcan/Cavium ThunderX2 are
+  * associated not at the root bus, but at a bridge below. This quirk avoids
+-- 
+2.17.1
+

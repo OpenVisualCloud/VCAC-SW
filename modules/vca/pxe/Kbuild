@@ -1,0 +1,6 @@
+subdir-ccflags-y += -I$(M)/vca/plx87xx/
+
+obj-m := vcapxe.o
+ccflags-y += -g -DDEBUG
+
+vcapxe-objs += vcapxe_main.o vcapxe_netdev.o

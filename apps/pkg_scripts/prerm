@@ -1,0 +1,7 @@
+#!/bin/bash
+rm -f /etc/vca_config.d/vca_config.old_user.xml /etc/vca_config.d/vca_config.old_default.xml
+cp /etc/vca_config.d/vca_config.xml /etc/vca_config.d/vca_config.old_user.xml
+vcactl config-default
+cp /etc/vca_config.d/vca_config.xml /etc/vca_config.d/vca_config.old_default.xml
+systemctl stop vcactl && systemctl disable vcactl
+[ ! -L /usr/sbin/vcactrl ] || unlink /usr/sbin/vcactrl

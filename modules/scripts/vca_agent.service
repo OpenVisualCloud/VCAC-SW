@@ -1,0 +1,12 @@
+[Unit]
+Description=VCA agent script for VCA
+Requires=default.target
+
+[Service]
+Type=forking
+ExecStart=/usr/sbin/vca_agent.sh start
+ExecStop=/usr/sbin/vca_agent.sh stop
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

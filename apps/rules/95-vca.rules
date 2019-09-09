@@ -1,0 +1,4 @@
+ACTION=="add", KERNEL=="vca??", GROUP="vcausers", MODE="0660", \
+RUN+="/bin/chgrp -R vcausers /sys/class/vca/vca%n/", \
+RUN+="/bin/chgrp vcausers /sys/class/vca/vca%n/device/dma_device/plx_dma_hang", \
+RUN+="/etc/vca_config.d/vca_auto_boot.sh scan"

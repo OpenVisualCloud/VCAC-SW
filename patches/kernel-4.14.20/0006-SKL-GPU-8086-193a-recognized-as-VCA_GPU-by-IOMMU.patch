@@ -1,0 +1,28 @@
+From 7f777380c326d3548269557517b779e14a11ba07 Mon Sep 17 00:00:00 2001
+From: Marcin Rysztowski <marcin.rysztowski@intel.com>
+Date: Wed, 19 Oct 2016 12:54:39 +0200
+Subject: [PATCH 06/16] SKL GPU (8086:193a) recognized as VCA_GPU by IOMMU
+
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+---
+ drivers/iommu/intel-iommu.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/intel-iommu.c b/drivers/iommu/intel-iommu.c
+index b482d4f..c8a9629 100644
+--- a/drivers/iommu/intel-iommu.c
++++ b/drivers/iommu/intel-iommu.c
+@@ -59,7 +59,7 @@
+ #define IS_USB_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_SERIAL_USB)
+ #define IS_ISA_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_BRIDGE_ISA)
+ #define IS_AZALIA(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x3a3e)
+-#define IS_VCA_GPU(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x162a)
++#define IS_VCA_GPU(pdev) ((pdev)->vendor == 0x8086 && ((pdev)->device == 0x162a || (pdev)->device == 0x193a))
+ 
+ #define IOAPIC_RANGE_START	(0xfee00000)
+ #define IOAPIC_RANGE_END	(0xfeefffff)
+-- 
+2.7.4
+

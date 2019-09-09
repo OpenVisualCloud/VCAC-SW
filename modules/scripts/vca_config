@@ -1,0 +1,35 @@
+#!/bin/bash
+#
+# Intel VCA Software Stack (VCASS)
+#
+# Copyright(c) 2015-2017 Intel Corporation.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2, as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# The full GNU General Public License is included in this distribution in
+# the file called "COPYING".
+#
+# Intel VCA Scripts.
+#
+
+export HOST_PORT='8086:2950'
+export CARD_PORT='8086:2953'
+export DMA_PORT='8086:2952'
+export VCA0_DMA_BDF='01:00.3'
+export VCA1_DMA_BDF='01:00.4'
+export VCA_DRIVER_NAME='plx87xx'
+export VCA0_CARD_IP='172.31.1.1'
+export VCA0_HOST_IP='172.31.1.254'
+export VCA1_CARD_IP='172.31.2.1'
+export VCA1_HOST_IP='172.31.2.254'
+export VCA_NET_MASK='255.255.255.0'
+export VCA_ETH_RULE='/etc/udev/rules.d/97-eth_up.rules'
+export VCA_MODPROBE_DEP_FILE='/etc/modprobe.d/vca.conf'
+export VCA_ETH_SCRIPT='/sbin/vca_eth_cfg.sh'

@@ -1,0 +1,7 @@
+#
+# Makefile - Intel VCA second manager driver
+# Copyright(c) 2015, Intel Corporation.
+#
+obj-m := vca_mgr_extd.o
+
+vca_mgr_extd-objs += vca_mgr_extd_main.o

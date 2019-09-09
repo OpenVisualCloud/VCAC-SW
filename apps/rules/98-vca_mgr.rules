@@ -1,0 +1,1 @@
+ACTION=="add", KERNEL=="vca_mgr?", GROUP="vcausers", MODE="0660", RUN+="/etc/vca_config.d/vca_auto_boot.sh scan %n"

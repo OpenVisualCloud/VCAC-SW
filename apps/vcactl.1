@@ -1,0 +1,188 @@
+.\" Manpage for vcactl
+.TH vcactl "1"
+.SH NAME
+.B Visual Compute Accelerator
+.SH SYNOPSIS
+    \fBvcactl\fR [\fIexecution_mode\fR] \fIcommand\fR [\fIsubcommand\fR] [card_id [node_id]] [command_params] [execution_mode]
+.SH DESCRIPTION
+.TP
+\fBstatus\fR
+show status of the node
+.TP
+\fBreset\fR
+reset the node
+.TP
+\fBwait\fR
+wait for node to boot OS
+.TP
+\fBwait\-BIOS\fR
+wait for BIOS to be ready on node
+.TP
+\fBboot\fR vcablk<N>
+boot OS on node using VCA block device vcablk<N>.
+Currently only booting from vcablk0 is supported.
+.TP
+\fBboot\fR [<img_path> | \-\-force\-last\-os\-image]
+boot OS on node(s) using Leveraged Boot Pprotocol (LBP).
+If no <img_path> is provided, configuration field 'os\-image' is used, unless \-\-force\-last\-os\-image parameter is given, which indicates to use image named by 'last\-os\-image' configuration field.
+.TP
+\fBreboot\fR [<img_path>]
+reboot into OS contained in the <img_path>.
+If no <img_path> is provided, configuration field 'last\-os\-image' or 'os\-image' is used.
+.TP
+\fBupdate\-BIOS\fR <bios_img_path>
+update BIOS on node.
+.TP
+\fBrecover\-BIOS\fR <bios_img_path>
+reset VCA 2 card to use Gold BIOS image. Then run procedure to update the node's production BIOS with the content of <bios_img_path>.
+To be used when the currently programmed production BIOS is unusable and needs to be replaced. This command works with VCA 2 cards only and takes more time than a typical production BIOS update.
+.TP
+\fBget\-BIOS\-cfg\fR [bios_cfg_name]
+read BIOS configuration item.
+Available configuration items to read:
+#ifdef SGX
+ \- gpu
+#endif
+ \- gpu\-aperture (size of node PCI address space dedicated for use as AGP memory address space)
+#ifdef SGX
+ \- ht (status of hyperthreading)
+ \- prm (SGX Processor Reserved Memory size in bytes, as hex)
+#endif
+ \- sgx (status of SGX)
+ \- tdp
+.TP
+\fBset\-BIOS\-cfg\fR <bios_cfg_name> <bios_cfg_value> [<bios_cfg_name2> <bios_cfg_value2> [<bios_cfg_name3> <bios_cfg_value3>]...]
+change one or multiple BIOS configuration item(s) and reset node thereafter. Sanity checks are performed before actualy setting the values. Multiple configuration items are set in the order given on the command line.
+Available configuration items with their allowed values:
+#ifdef SGX
+ \- for 'epoch': factory-default, random, <128-bit-hex-value>
+ \- for 'gpu': enable, disable
+#endif
+ \- for 'gpu\-aperture': 128, 256, 512, 1024, 2048, 4096 (size in MB)
+#ifdef SGX
+ \- for 'ht': enable, disable
+ \- for 'prm': auto, 32, 64, 128 (size in MB)
+#endif
+ \- for 'sgx': enable, disable
+ \- for 'tdp': from 0 to 11, where 0 means base value, 1 means base + 1, etc.
+.TP
+\fBupdate\-MAC\fR <card_id> <node_id> <mac_addr>
+update MAC address of the node with desired value. This action requires superuser privileges.
+This command requires card id, node id, and MAC address.
+.TP
+\fBupdate\-SN\fR <card_id> <serial_nr>
+update serial number of the card with desired value. This action requires superuser privileges.
+This command requires card id and serial number.
+.TP
+\fBupdate\-EEPROM\fR <eeprom_file>
+update card EEPROM with the contents of <eeprom_file>. This action requires superuser privileges.
+This command does not accept node_id parameter \- applies to all nodes on card
+.TP
+\fBclear\-SMB\-event\-log\fR
+clear SMB event log for the node
+.TP
+\fBscript\fR
+set script parameter in configuration
+.TP
+\fBconfig\-show\fR
+shows config for node
+.TP
+\fBconfig\fR <config_param> <config_value>
+set parameter in xml configuration file.
+This command requires xml config parameter and its value
+.TP
+\fBconfig\-use\fR
+restart ping daemons with new configuration.
+This command does not take any parameters
+.TP
+\fBconfig\-default\fR
+restore vca configuration to default values.
+This command does not take any parameters
+.TP
+\fBtemp\fR
+read temp from node
+.TP
+\fBICMP\-watchdog\fR <subcmd>
+start/stop ICMP watchdog. Subcommands:
+        1 : enable
+        0 : disable
+.TP
+\fBnetwork\fR <subcmd>
+get or manage node network configuration. Subcommands:
+        all : print all network information
+        dhcp\-renew : renew IP address assigned by DHCP
+        ip : print IP address
+        ip6 : print IPv6 address
+        mac : print MAC address
+        stats : print interface statistics
+        vm\-mac : print VM MAC address
+.TP
+\fBblockio\fR <subcmd>
+manage block devices. Subcommands:
+        list [vcablk<N>] : list block devices
+        open vcablk<N> [[RO|RW <file_path>]|[ramdisk <size_mb>]] : open block device
+        close vcablk<N> : close block device
+.TP
+\fBinfo\fR <subcmd>
+print VCA information. Subcommands:
+ hw : print device information
+ system : print system information
+ node\-os : print OS booted on node
+ node\-stats: print additional statistics of running node
+ BIOS : print BIOS verison information
+ memsize : print memory size on node
+ cpu\-uuid : print node uuid
+.TP
+\fBid-led\fR <subcmd> <card_id>
+switch LED on and off. Subcommands:
+ on : turn LED on
+ off : turn LED off
+.TP
+\fBpwrbtn\-short\fR
+power button toggle
+.TP
+\fBpwrbtn\-long\fR
+power button override 5 sec
+.TP
+\fBos\-shutdown\fR
+shutdown OS
+.TP
+\fBhelp\fR
+print usage instruction
+.SH OPTIONS
+.TP
+\fB\-v\fR
+increase log verbosity
+.TP
+\fB\-vv\fR
+increase log verbosity even more
+.TP
+\fB\-\-skip\-modprobe\-check\fR
+turn off checking whether node is ready
+.TP
+\fB\-\-skip\-card\-type\-check\fR
+turn off checking whether EEPROM is compatible for given card
+.TP
+\fB\-\-force\fR
+force command execution (WARNING: you do it at your own risk!)
+.SH EXAMPLES
+ vcactl reset
+ vcactl reset 0 2
+ vcactl config auto\-boot 0
+ vcactl boot 1 2 /home/centOS7.img
+ vcactl boot 0 1 vcablk0
+ vcactl boot 1 1 \-\-force\-last\-os\-image
+ vcactl reboot
+ vcactl ICMP\-watchdog 1 0 2 127.0.0.1
+ vcactl network ip 0 0
+ vcactl update\-EEPROM /home/Fab2_8713_8733_v23_crc_B7D58879.bin
+ vcactl update\-BIOS 0 0 /home/MonteVistaBios.img
+ vcactl update\-MAC 0 1 00:01:02:03:04:05
+ vcactl blockio list
+ vcactl blockio open 0 1 vcablk3 ramdisk 20
+ vcactl blockio open 0 1 vcablk3 RO ~/disk.img
+ vcactl blockio list 0 1 vcablk3
+ vcactl blockio close 0 1  vcablk3
+ vcactl blockio open vcablk0
+ vcactl status
+

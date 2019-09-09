@@ -1,0 +1,40 @@
+From 8ceae215ed4ff32ec3669f240c0bd21bb8741a7f Mon Sep 17 00:00:00 2001
+From: Marcin Rysztowski <marcin.rysztowski@intel.com>
+Date: Fri, 7 Oct 2016 13:09:25 +0200
+Subject: [PATCH 05/12] vmlinux*.bz2 file moved to separeate kernel-debug
+ package
+
+vmlinux*.bz2 file, containing unstripped vmlinux file, moved to separate package to reduce footprint of kernel image package
+---
+ scripts/package/mkspec | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/scripts/package/mkspec b/scripts/package/mkspec
+index e05646dc2..8be06ff03 100755
+--- a/scripts/package/mkspec
++++ b/scripts/package/mkspec
+@@ -47,6 +47,7 @@ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
+ 	Vendor: The Linux Community
+ 	URL: http://www.kernel.org
+ $S	Source: kernel-$__KERNELRELEASE.tar.gz
++	BuildRoot: %{_tmppath}/%{name}-%{PACKAGE_VERSION}-root
+ 	Provides: $PROVIDES
+ 	%define __spec_install_post /usr/lib/rpm/brp-compress || :
+ 	%define debug_package %{nil}
+@@ -74,6 +75,13 @@ $S$M	%description -n kernel-devel
+ $S$M	This package provides kernel headers and makefiles sufficient to build modules
+ $S$M	against the $__KERNELRELEASE kernel package.
+ $S$M
++$S$M	%package debug
++$S$M	Summary: Debug package with unstripped $__KERNELRELEASE kernel
++$S$M	Group: System Environment/Kernel
++$S$M	AutoReqProv: no
++$S$M	%description -n kernel-debug
++$S$M	This package provides unstripped $__KERNELRELEASE kernel
++$S$M
+ $S	%prep
+ $S	%setup -q
+ $S
+-- 
+2.17.1
+

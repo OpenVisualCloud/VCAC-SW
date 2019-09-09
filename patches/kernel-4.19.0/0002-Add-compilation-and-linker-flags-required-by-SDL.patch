@@ -1,0 +1,36 @@
+From 3da970656525ab60aa0c0914a6437bfffc038ee8 Mon Sep 17 00:00:00 2001
+From: Marcin Rysztowski <marcin.rysztowski@intel.com>
+Date: Tue, 24 Mar 2015 10:43:32 +0100
+Subject: [PATCH 02/12] Add compilation and linker flags required by SDL
+
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+---
+ Makefile | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 69fa5c031..0fab550c1 100644
+--- a/Makefile
++++ b/Makefile
+@@ -392,12 +392,12 @@ CHECK		= sparse
+ CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
+ 		  -Wbitwise -Wno-return-void -Wno-unknown-attribute $(CF)
+ NOSTDINC_FLAGS  =
+-CFLAGS_MODULE   =
++CFLAGS_MODULE   = -fstack-protector -O2 -D_FORTIFY_SOURCE=2 -Wformat
+ AFLAGS_MODULE   =
+-LDFLAGS_MODULE  =
+-CFLAGS_KERNEL	=
++LDFLAGS_MODULE  = -z noexecstack -z relro -z now
++CFLAGS_KERNEL	= -D_FORTIFY_SOURCE=2 -Wformat
+ AFLAGS_KERNEL	=
+-LDFLAGS_vmlinux =
++LDFLAGS_vmlinux	= -z noexecstack -z relro -z now
+ 
+ # Use USERINCLUDE when you must reference the UAPI directories only.
+ USERINCLUDE    := \
+-- 
+2.17.1
+

@@ -1,0 +1,56 @@
+From 8282a0d4b7b7de7551b6c6d0729cbbb5adc6871e Mon Sep 17 00:00:00 2001
+From: Marcin Rysztowski <marcin.rysztowski@intel.com>
+Date: Fri, 7 Oct 2016 13:09:25 +0200
+Subject: [PATCH 05/16] vmlinux*.bz2 file moved to separeate kernel-debug
+ package
+
+vmlinux*.bz2 file, containing unstripped vmlinux file, moved to separate package to limit footprint of image
+
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+---
+ scripts/package/mkspec | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/scripts/package/mkspec b/scripts/package/mkspec
+index f47f17a..220f145 100755
+--- a/scripts/package/mkspec
++++ b/scripts/package/mkspec
+@@ -65,6 +65,13 @@ echo "%description -n kernel-devel"
+ echo "This package provides kernel headers and makefiles sufficient to build modules"
+ echo "against the $__KERNELRELEASE kernel package."
+ echo ""
++echo "%package debug"
++echo "Summary: Debug package with unstripped $__KERNELRELEASE kernel"
++echo "Group: System Environment/Kernel"
++echo "AutoReqProv: no"
++echo "%description -n kernel-debug"
++echo "This package provides unstripped $__KERNELRELEASE kernel"
++echo ""
+ 
+ if ! $PREBUILT; then
+ echo "%prep"
+@@ -149,12 +156,18 @@ echo '%defattr (-, root, root)'
+ echo "/lib/modules/$KERNELRELEASE"
+ echo "%exclude /lib/modules/$KERNELRELEASE/build"
+ echo "%exclude /lib/modules/$KERNELRELEASE/source"
+-echo "/boot/*"
++echo "/boot/config*"
++echo "/boot/System.map*"
++echo "/boot/vmlinuz*"
+ echo ""
+ echo "%files headers"
+ echo '%defattr (-, root, root)'
+ echo "/usr/include"
+ echo ""
++echo "%files debug"
++echo '%defattr (-, root, root)'
++echo "/boot/vmlinux*bz2"
++echo ""
+ if ! $PREBUILT; then
+ echo "%files devel"
+ echo '%defattr (-, root, root)'
+-- 
+2.7.4
+

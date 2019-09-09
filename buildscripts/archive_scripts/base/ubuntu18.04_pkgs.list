@@ -1,0 +1,61 @@
+# This is a list of Ubuntu packages
+# Empty lines and parts of line starting with the hash (#) are ignored
+
+# kernel & modules configuration, diagnostics:
+kmod
+#module-init-tools nonessesntial; will be downloaded as dependency if needed
+pciutils
+acpid
+
+# build environment configuration (e.g. grub-mkstandalone)
+lsb-release
+grub-common
+grub-efi-amd64-bin
+
+# to resolve: A start job is running for dev-ttyS0.device (5s / 1min 30s):
+udev
+
+# tools for making the interface up by the /sbin/vca_agent.sh:
+net-tools
+iputils-ping
+iproute2
+
+# networking:
+openssh-server
+rpcbind
+nfs-common
+netbase       # required by nfs-common despite lacking dependency
+firewalld
+
+# utilities (may include ksh, traceroute, strace, ltrace...)
+vim
+file
+nano
+less
+
+# for bridging in volatile; e.g. iproute2 provides 'ip' for KVM:
+bridge-utils
+ifupdown
+isc-dhcp-client
+iproute2
+###ipcalc  # vca-disk (=blockio) setting IP with bridging # commented out by AO as uncecessary
+
+# for vca_elog.py script
+dmidecode
+
+# temperature logging, mcelog dropped in Ubuntu 18.04 Bionic (https://bugs.launchpad.net/ubuntu/+source/mcelog/+bug/1752251), rasdaemon suggested instead (for the mcelog test):
+lm-sensors
+rasdaemon
+
+# for vca_elog.py script and for the mcelog test:
+python
+
+# vcacenter:
+wget
+
+# dependencies of daemon-vca:
+mtools
+ipcalc
+gdisk
+kpartx
+gawk

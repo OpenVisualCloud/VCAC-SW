@@ -1,0 +1,13 @@
+[Unit]
+Description=Auto boot script for VCA
+Requires=network.target
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=/etc/vca_config.d/vca_auto_boot.sh start
+ExecStop=/etc/vca_config.d/vca_auto_boot.sh stop
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

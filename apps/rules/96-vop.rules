@@ -1,0 +1,1 @@
+ACTION=="add", KERNEL=="vop_virtio??", GROUP="vcausers", MODE="0660", RUN+="/etc/vca_config.d/vca_auto_boot.sh recreate_vop_virtio_device %n"

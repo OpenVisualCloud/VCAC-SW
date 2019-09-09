@@ -1,0 +1,5 @@
+obj-m := plx87xx_dma.o
+plx87xx_dma-objs :=
+plx87xx_dma-objs += plx_pci.o
+plx87xx_dma-objs += plx_dma.o
+plx87xx_dma-objs += plx_debugfs.o

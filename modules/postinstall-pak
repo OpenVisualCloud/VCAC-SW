@@ -1,0 +1,19 @@
+#!/bin/bash
+set -eu
+
+# During execution this file is most probably called "/var/lib/dpkg/info/vcass-modules.postinst"
+# and there should a be file "vcass-modules.list" in the same directory,
+# which lists destination paths for module files. Some of those destination paths are in the tree
+# rooted at "/lib/modules/${dest_kernel}/".
+# The value of dest_kernel is necessary for depmod to direct it not to use the version string of
+# the currently running kernel as reported by "uname -r".
+script_dir="${0%/*}"
+
+# output like: 4.4.98-1.2.2.0.vca
+dest_kernel=$(awk -F/ '
+	/^\/lib\/modules\/[^\/]+$/ { matches++; print $NF }
+	END { if (matches != 1) exit 1 }
+	' "$script_dir"/vcass-modules*.list)
+
+depmod "$dest_kernel"
+vca_setup.sh

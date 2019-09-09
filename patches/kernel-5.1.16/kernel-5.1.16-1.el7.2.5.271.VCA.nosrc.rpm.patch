@@ -1,0 +1,312 @@
+From 25fbb710f029139eac716a41dd1eac62e4ae54fc Mon Sep 17 00:00:00 2001
+From: Marcin Rysztowski <marcin.rysztowski@intel.com>
+Date: Tue, 24 Mar 2015 10:43:32 +0100
+Subject: [PATCH 01/10] Add compilation and linker flags required by SDL
+
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+---
+ Makefile | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 46a0ae537182..3a292cd84a04 100644
+--- a/Makefile
++++ b/Makefile
+@@ -415,12 +415,12 @@ CHECK		= sparse
+ CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
+ 		  -Wbitwise -Wno-return-void -Wno-unknown-attribute $(CF)
+ NOSTDINC_FLAGS :=
+-CFLAGS_MODULE   =
++CFLAGS_MODULE   = -fstack-protector -O2 -D_FORTIFY_SOURCE=2 -Wformat
+ AFLAGS_MODULE   =
+-LDFLAGS_MODULE  =
+-CFLAGS_KERNEL	=
++LDFLAGS_MODULE  = -z noexecstack -z relro -z now
++CFLAGS_KERNEL	= -D_FORTIFY_SOURCE=2 -Wformat
+ AFLAGS_KERNEL	=
+-LDFLAGS_vmlinux =
++LDFLAGS_vmlinux	= -z noexecstack -z relro -z now
+ 
+ # Use USERINCLUDE when you must reference the UAPI directories only.
+ USERINCLUDE    := \
+-- 
+2.22.0
+
+
+From 92bc57e4954f0c18c4da33d64888489053442bd1 Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Fri, 12 Jul 2019 08:33:55 +0200
+Subject: [PATCH 02/10] Add default .config file. The .config file comes from
+ package kernel-ml-5.1.16-1.el7.elrepo.nosrc.rpm from ELREPO unofficial
+ repository
+
+---
+ .config  | 8494 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ Makefile |    2 +-
+ 2 files changed, 8495 insertions(+), 1 deletion(-)
+ create mode 100644 .config
+
+diff --git a/.config b/.config
+new file mode 100644
+index 000000000000..020cd2726110
+diff --git a/Makefile b/Makefile
+index 3a292cd84a04..66374174cb6a 100644
+--- a/Makefile
++++ b/Makefile
+@@ -2,7 +2,7 @@
+ VERSION = 5
+ PATCHLEVEL = 1
+ SUBLEVEL = 16
+-EXTRAVERSION =
++EXTRAVERSION = -1.el7.x86_64
+ NAME = Shy Crocodile
+ 
+ # *DOCUMENTATION*
+-- 
+2.22.0
+
+
+From e51e8387f556703d9a40d3ad57f7f020984a2cf2 Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Fri, 12 Jul 2019 12:39:42 +0200
+Subject: [PATCH 03/10] Enable flags to emulate PCH-uart in PCH-SKL as legacy
+ device 16550A  CONFIG_SERIAL_8250_DW=y  CONFIG_MFD_INTEL_LPSS_PCI=y 
+ CONFIG_MFD_INTEL_LPSS_ACPI=y
+
+---
+ .config | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+-- 
+2.22.0
+
+
+From 7e1e09611428a2ff0df9e1f69d7842bb9a91bd50 Mon Sep 17 00:00:00 2001
+From: Adam Rutkowski <adam.j.rutkowski@intel.com>
+Date: Wed, 26 Aug 2015 07:05:05 -0400
+Subject: [PATCH 04/10] Allow PCI passtrough for BDW graphics despite RMRR
+ usage
+
+Broadwell GPU drivers for both Windows and Linux are capable of working in
+"universal passthrough" mode where standard PCI passhtorugh of GPU device
+is enough for the guest to handle GPU device. Thus we assume RMRR space is
+not required for this devices. For now enabling this for VCA GPU device
+only as we haven't tested other devices.
+
+Signed-off-by: Adam Rutkowski <adam.j.rutkowski@intel.com>
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+---
+ drivers/iommu/intel-iommu.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/intel-iommu.c b/drivers/iommu/intel-iommu.c
+index 0feb3f70da16..5bc33ce042b5 100644
+--- a/drivers/iommu/intel-iommu.c
++++ b/drivers/iommu/intel-iommu.c
+@@ -63,6 +63,7 @@
+ #define IS_USB_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_SERIAL_USB)
+ #define IS_ISA_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_BRIDGE_ISA)
+ #define IS_AZALIA(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x3a3e)
++#define IS_VCA_GPU(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x162a)
+ 
+ #define IOAPIC_RANGE_START	(0xfee00000)
+ #define IOAPIC_RANGE_END	(0xfeefffff)
+@@ -2917,6 +2918,13 @@ static bool device_has_rmrr(struct device *dev)
+  * The same exception is made for graphics devices, with the requirement that
+  * any use of the RMRR regions will be torn down before assigning the device
+  * to a guest.
++ *
++ * Broadwell GPU drivers for both Windows and Linux are capable of working in
++ * "universal passthrough" mode where standard PCI passhtorugh of GPU device
++ * is enough for the guest to handle GPU device. Thus we assume RMRR space is
++ * not required for this devices. For now enabling this for VCA GPU device
++ * only as we haven't tested other devices.
++ *
+  */
+ static bool device_is_rmrr_locked(struct device *dev)
+ {
+@@ -2926,7 +2934,7 @@ static bool device_is_rmrr_locked(struct device *dev)
+ 	if (dev_is_pci(dev)) {
+ 		struct pci_dev *pdev = to_pci_dev(dev);
+ 
+-		if (IS_USB_DEVICE(pdev) || IS_GFX_DEVICE(pdev))
++		if (IS_USB_DEVICE(pdev) || IS_GFX_DEVICE(pdev) || IS_VCA_GPU(pdev))
+ 			return false;
+ 	}
+ 
+-- 
+2.22.0
+
+
+From dc69aaf81fe0100f9b9da0041865801956fdb460 Mon Sep 17 00:00:00 2001
+From: Marcin Rysztowski <marcin.rysztowski@intel.com>
+Date: Fri, 7 Oct 2016 13:09:25 +0200
+Subject: [PATCH 05/10] vmlinux*.bz2 file moved to separeate kernel-debug
+ package
+
+vmlinux*.bz2 file, containing unstripped vmlinux file, moved to separate package to reduce footprint of kernel image package
+---
+ scripts/package/mkspec | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/scripts/package/mkspec b/scripts/package/mkspec
+index 009147d4718e..73131122d97c 100755
+--- a/scripts/package/mkspec
++++ b/scripts/package/mkspec
+@@ -48,6 +48,7 @@ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
+ 	Vendor: The Linux Community
+ 	URL: http://www.kernel.org
+ $S	Source: kernel-$__KERNELRELEASE.tar.gz
++	BuildRoot: %{_tmppath}/%{name}-%{PACKAGE_VERSION}-root
+ 	Provides: $PROVIDES
+ 	%define __spec_install_post /usr/lib/rpm/brp-compress || :
+ 	%define debug_package %{nil}
+@@ -75,6 +76,13 @@ $S$M	%description -n kernel-devel
+ $S$M	This package provides kernel headers and makefiles sufficient to build modules
+ $S$M	against the $__KERNELRELEASE kernel package.
+ $S$M
++$S$M	%package debug
++$S$M	Summary: Debug package with unstripped $__KERNELRELEASE kernel
++$S$M	Group: System Environment/Kernel
++$S$M	AutoReqProv: no
++$S$M	%description -n kernel-debug
++$S$M	This package provides unstripped $__KERNELRELEASE kernel
++$S$M
+ $S	%prep
+ $S	%setup -q
+ $S
+-- 
+2.22.0
+
+
+From 9359ab393f343b88d5bbca2010ae00b3d4093ed0 Mon Sep 17 00:00:00 2001
+From: Marcin Rysztowski <marcin.rysztowski@intel.com>
+Date: Wed, 19 Oct 2016 12:54:39 +0200
+Subject: [PATCH 06/10] SKL GPU (8086:193a) recognized as VCA_GPU by IOMMU
+
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+---
+ drivers/iommu/intel-iommu.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/intel-iommu.c b/drivers/iommu/intel-iommu.c
+index 5bc33ce042b5..6d779c9ddcda 100644
+--- a/drivers/iommu/intel-iommu.c
++++ b/drivers/iommu/intel-iommu.c
+@@ -63,7 +63,7 @@
+ #define IS_USB_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_SERIAL_USB)
+ #define IS_ISA_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_BRIDGE_ISA)
+ #define IS_AZALIA(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x3a3e)
+-#define IS_VCA_GPU(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x162a)
++#define IS_VCA_GPU(pdev) ((pdev)->vendor == 0x8086 && ((pdev)->device == 0x162a || (pdev)->device == 0x193a))
+ 
+ #define IOAPIC_RANGE_START	(0xfee00000)
+ #define IOAPIC_RANGE_END	(0xfeefffff)
+-- 
+2.22.0
+
+
+From 8a45c7e64b8e5517f0df7d0bb0f84a3e8ba14aeb Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Thu, 18 Jul 2019 14:45:22 +0200
+Subject: [PATCH 07/10] Add traditional VCA options in .config based on 4p14
+
+---
+ .config | 165 +++++++++++++++++++++++++++++++-------------------------
+ 1 file changed, 91 insertions(+), 74 deletions(-)
+
+-- 
+2.22.0
+
+
+From 82b8fc85ce242036f334d0cb4792dfd4ee450fb9 Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Thu, 18 Jul 2019 14:46:14 +0200
+Subject: [PATCH 08/10] Add to .config options suggested auomatically during
+ build
+
+---
+ .config | 128 ++++++++++++++++++++++----------------------------------
+ 1 file changed, 49 insertions(+), 79 deletions(-)
+
+-- 
+2.22.0
+
+
+From 28d6a44b546c4fa9327a8e559ebaa7b0add6ba0f Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Mon, 27 Nov 2017 12:28:08 +0100
+Subject: [PATCH 09/10] roce support
+
+Also .config options addedd automatically during build:
+    CONFIG_DMA_DIRECT_OPS=y
+    # CONFIG_HFI1_DEBUG_SDMA_ORDER is not set
+    CONFIG_INFINIBAND_BNXT_RE=m
+    CONFIG_INFINIBAND_HFI1=m
+    CONFIG_INFINIBAND_QIB_DCA=y
+    CONFIG_INFINIBAND_QIB=m
+    CONFIG_INFINIBAND_RDMAVT=m
+    CONFIG_RDMA_RXE=m
+    # CONFIG_SDMA_VERBOSITY is not set
+---
+ .config | 9 ++-------
+ 1 file changed, 2 insertions(+), 7 deletions(-)
+
+-- 
+2.22.0
+
+
+From d6133ddc0a4c5d58edd9a0b2cbe40b01e5548c50 Mon Sep 17 00:00:00 2001
+From: Piotr Zawieracz <piotr.zawieracz@intel.com>
+Date: Fri, 21 Sep 2018 15:55:12 +0200
+Subject: [PATCH 10/10] IOMMU: Adding IOMMU aliases to PLX VCA and DMA on both
+ sides.
+
+_
+---
+ drivers/pci/quirks.c | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/drivers/pci/quirks.c b/drivers/pci/quirks.c
+index cc616a5f6a8f..57e07429f20a 100644
+--- a/drivers/pci/quirks.c
++++ b/drivers/pci/quirks.c
+@@ -4011,6 +4011,33 @@ static void quirk_mic_x200_dma_alias(struct pci_dev *pdev)
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2260, quirk_mic_x200_dma_alias);
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2264, quirk_mic_x200_dma_alias);
+ 
++
++/*
++ * VCA NTB forwards PCIe traffic using multiple alien RIDs. They have to
++ * be added as aliases to the DMA device in order to allow buffer access
++ * when IOMMU is enabled. Following devfns have to match RIT-LUT table
++ * programmed in the EEPROM.
++ */
++static void quirk_plx_vca_alias(struct pci_dev *pdev)
++{
++	const unsigned num_pci_slots = 0x20;
++	unsigned int slot;
++	for (slot = 0; slot < num_pci_slots; slot++) {
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x0));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x1));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x2));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x3));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x4));
++	}
++}
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2954, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2955, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2956, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2958, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2959, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x295A, quirk_plx_vca_alias);
++
++
+ /*
+  * The IOMMU and interrupt controller on Broadcom Vulcan/Cavium ThunderX2 are
+  * associated not at the root bus, but at a bridge below. This quirk avoids
+-- 
+2.22.0
+

@@ -1,0 +1,37 @@
+commit bfe92b37045f123bf6580f63b08acd181faba2c0
+Author: Przemek Kitszel <przemyslawx.kitszel@intel.com>
+Date:   Wed Aug 14 13:31:55 2019 +0200
+
+    Build vcad.gz Ubuntu 18.04 image
+    
+    Add support for 4.14.20 and 5.1.16 compilation in master_build.sh.
+    
+    Generate SAs with master_build.sh
+    Note: For now only non-MSS images could be build
+
+diff --git a/quickbuild/generate_images.sh b/quickbuild/generate_images.sh
+index 363fdde..c0e6483 100755
+--- a/quickbuild/generate_images.sh
++++ b/quickbuild/generate_images.sh
+@@ -280,7 +280,7 @@ function gen_ubuntu {
+ 		;;
+ 	esac
+ 	if [ "${CSTATE}" == OFF ]; then
+-		_ARCHIVES="${_ARCHIVES} --archive turboctl.tar"
++		_ARCHIVES="${_ARCHIVES}"
+ 		_GRUB_CFG="${_GRUB_CFG:0:-4}_cstate_off.cfg"
+ 		_CSTATE_NAME="_cstate_off"
+ 	fi
+@@ -538,9 +538,9 @@ generate_images(){
+ 					echo -e "no MSS images selected\n"
+ 				;;
+ 				STD)
+-					gen_ubuntu VLTL BRM
+-					gen_ubuntu PRST BRM
+-					gen_ubuntu VLTL BRM OFF
++					#~ gen_ubuntu VLTL BRM
++					#~ gen_ubuntu PRST BRM
++					#~ gen_ubuntu VLTL BRM OFF
+ 					gen_ubuntu PRST BRM OFF
+ 				;;
+ 				*)

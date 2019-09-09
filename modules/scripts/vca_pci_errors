@@ -1,0 +1,26 @@
+#!/bin/bash -e
+trap 'e=$? ; echo -e "Error ${e}\t${BASH_COMMAND}" >&2 ; exit ${e}' ERR
+for vca in /sys/kernel/debug/plx87xx/*/dump_regs_complete; do
+	grep -e '\[0x3[cdef]fac\]' -e '\[0x3[cdef]fb0\]' ${vca} \
+	| while read reg sep value; do
+		echo -en "${vca: -31:12}\t"
+		case ${reg} in
+			\[0x3f???\]) echo -en "NT0\tlink\t" ;;
+			\[0x3e???\]) echo -en "NT0\tvirtual\t" ;;
+			\[0x3d???\]) echo -en "NT1\tlink\t" ;;
+			\[0x3c???\]) echo -en "NT1\tvirtual\t" ;;
+			*) echo ${reg} ;;
+		esac
+		case ${reg} in
+			\[0x??fb0\]) echo -en "DLLP\t" ;;
+			\[0x??fac\]) echo -en "TLP\t" ;;
+			*) echo ${reg} ;;
+		esac
+		if [[ '00000000' == "${value}" ]]; then
+			echo -e "\e[32m${value}\e[0m"
+		else
+			echo -e "\e[31m${value}\e[0m"
+		fi
+	done
+done
+echo -e '#device\tport\tside\tBad Counter' >&0

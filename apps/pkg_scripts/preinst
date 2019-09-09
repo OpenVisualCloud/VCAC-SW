@@ -1,0 +1,18 @@
+#!/bin/bash
+
+if [ -z `getent group vcausers` ] ; then
+	groupadd vcausers
+fi
+
+if [ -z `getent passwd vcausers_default` ] ; then
+	GUID=`getent group vcausers | cut -d: -f3`
+	adduser --system vcausers_default --gid ${GUID}
+fi
+
+mkdir -p /var/lock/vca
+chmod 775 /var/lock/vca
+mkdir -p /var/log/vca
+chmod 775 /var/log/vca
+mv -f /var/log/vcactld      /var/log/vca/vcactld.log  2>/dev/null || true
+mv -f /var/log/vca_ifup_log /var/log/vca/vca_ifup.log 2>/dev/null || true
+chgrp -R vcausers /var/log/vca

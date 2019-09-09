@@ -1,0 +1,13 @@
+#!/bin/bash
+ln -s /usr/sbin/vcactl /usr/sbin/vcactrl
+chgrp -R vcausers /etc/vca_config.d/
+chmod 775 /etc/vca_config.d/
+chgrp vcausers /usr/lib/vca/*.sh
+chgrp vcausers /usr/sbin/vca*
+
+if [ -f /etc/vca_config.d/vca_config.old_user.xml ]; then
+	cp /etc/vca_config.d/vca_config.xml /etc/vca_config.d/vca_config.new_default.xml
+	vca_config_upgrade.sh || echo 'Configuration update failed, this is not fatal error.'
+fi
+
+systemctl enable vcactl && systemctl start vcactl

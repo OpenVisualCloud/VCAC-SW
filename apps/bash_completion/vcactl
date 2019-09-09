@@ -1,0 +1,162 @@
+#!/bin/bash
+#
+# Intel VCA Software Stack (VCASS)
+#
+# Copyright(c) 2015 Intel Corporation.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License, version 2, as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# The full GNU General Public License is included in this distribution in
+# the file called "COPYING".
+#
+# Intel VCA Scripts.
+#
+
+_vcactl()
+{
+	local cur prev opts
+	COMPREPLY=()
+	cur="${COMP_WORDS[COMP_CWORD]}"
+	prev="${COMP_WORDS[COMP_CWORD-1]}"
+	opts="-v -vv"
+	opts2="--skip-modprobe-check --skip-card-type-check"
+	opts3="--force"
+	cmds="status
+		help
+		reset
+		wait
+		wait-BIOS
+		boot
+		reboot
+		update-BIOS
+		recover-BIOS
+		update-MAC
+		update-SN
+		update-EEPROM
+		clear-SMB-event-log
+		script
+		config-show
+		config
+		config-use
+		config-default
+		temp
+		ICMP-watchdog
+		network
+		info
+		pwrbtn-short
+		pwrbtn-long
+		blockio
+		os-shutdown
+		get-BIOS-cfg
+		set-BIOS-cfg
+		id-led"
+
+	get_BIOS_cfg_subcmds="
+#ifdef SGX
+		epoch
+		gpu
+#endif
+		gpu-aperture
+#ifdef SGX
+		ht
+		prm
+#endif
+		sgx
+		tdp"
+
+	set_BIOS_cfg_subcmds="
+#ifdef SGX
+		epoch
+		gpu
+#endif
+		gpu-aperture
+#ifdef SGX
+		ht
+		prm
+#endif
+		sgx
+		tdp"
+
+	network_subcmds="
+		all
+		ip
+		ip6
+		mac
+		vm-mac
+		stats
+		dhcp-renew"
+
+	blockio_subcmds="
+		list
+		open
+		close"
+
+	info_subcmds='
+		hw
+		system
+		node-os
+		BIOS
+		memsize
+		cpu-uuid
+		node-stats'
+
+	id_led_subcmds='
+		on
+		off'
+
+	if [[ ${prev} == vcactl ]] ; then
+		if [[ ${cur} == -* ]] ; then
+			COMPREPLY=( $(compgen -W "${opts} ${opts2} ${opts3}" -- ${cur}) )
+			return 0
+		else
+			COMPREPLY=( $(compgen -W "${cmds} ${opts} ${opts2} ${opts3}" -- ${cur}) )
+			return 0
+		fi
+	fi
+
+	opts_arr=($opts)
+	opts2_arr=($opts2)
+	opts3_arr=($opts3)
+	opts_len=${#opts_arr}+${#opts2_arr}+${opts3_arr}
+	for ((i = 0; i < $opts_len; i++)); do
+		if [[ ${opts_arr[$i]} == ${prev} ]]; then
+			COMPREPLY=( $(compgen -W "${cmds} ${opts2} ${opts3}" -- ${cur}) )
+			return 0
+		elif [[ ${opts2_arr[$i]} == ${prev} ]]; then
+			COMPREPLY=( $(compgen -W "${cmds} ${opts} ${opts3}" -- ${cur}) )
+			return 0
+		elif [[ ${opts3_arr[$i]} == ${prev} ]]; then
+			COMPREPLY=( $(compgen -W "${cmds} ${opts} ${opts2}" -- ${cur}) )
+			return 0
+		fi
+	done
+
+	if [[ ${prev} == "network" ]] ; then
+		COMPREPLY=( $(compgen -W "${network_subcmds}" -- ${cur}) )
+			return 0
+	elif [[ ${prev} == "blockio" ]] ; then
+		COMPREPLY=( $(compgen -W "${blockio_subcmds}" -- ${cur}) )
+		return 0
+	elif [[ ${prev} == "info" ]] ; then
+		COMPREPLY=( $(compgen -W "${info_subcmds}" -- ${cur}) )
+		return 0
+	elif [[ ${prev} == "id-led" ]] ; then
+		COMPREPLY=( $(compgen -W "${id_led_subcmds}" -- ${cur}) )
+		return 0
+	elif [[ ${prev} == "get-BIOS-cfg" ]] ; then
+		COMPREPLY=( $(compgen -W "${get_BIOS_cfg_subcmds}" -- ${cur}) )
+		return 0
+	elif [[ ${prev} == "set-BIOS-cfg" ]] ; then
+		COMPREPLY=( $(compgen -W "${set_BIOS_cfg_subcmds}" -- ${cur}) )
+		return 0
+	fi
+	COMPREPLY=( $( compgen -o plusdirs -f -- ${cur}) )
+}
+complete -o filenames -F _vcactl vcactl

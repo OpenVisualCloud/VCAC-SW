@@ -1,0 +1,6 @@
+comment "Intel VCA Driver"
+
+config INTEL_VCA
+	tristate "Intel VCA Driver"
+	help
+	  Driver for VCA card.

@@ -1,0 +1,8 @@
+#
+# Makefile - Intel VCA manager driver
+# Copyright(c) 2015, Intel Corporation.
+#
+obj-m := vca_csa.o
+
+vca_csa-objs += vca_csa_main.o
+vca_csa-objs += vca_csa_sysfs.o

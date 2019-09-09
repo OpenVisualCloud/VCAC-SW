@@ -1,0 +1,117 @@
+# COSAI BEGIN BLOCK
+KERNWARNFLAGS ?= -Werror
+# COSAI END BLOCK -
+
+not-y := n
+not-n := y
+m-not-y := n
+m-not-n := m
+
+ifeq ($(CONFIG_X86_VCAPCI),)
+CONFIG_X86_VCAPCI := n
+endif
+ifeq ($(CONFIG_X86_VCAPCI)$(VCA_CARD_ARCH),n)
+$(error building for host, but $$(VCA_CARD_ARCH) is unset)
+endif
+ifneq ($(VCA_CARD_ARCH),$(firstword $(filter l1om k1om,$(VCA_CARD_ARCH))))
+$(error $$(VCA_CARD_ARCH) must be l1om or k1om)
+endif
+
+# Force optimization to -O2 in case the kernel was configured to use
+# -Os. The main reason is pretty dumb -- -Os has a warning -O2 doesn't,
+# and we compile with -Werror internally. Another reason is that -O2 is
+# what we're used to in terms of validation and performance analysis. We
+# should probably get rid of this, though.
+subdir-ccflags-y += -O2
+
+# Makes it easy to inject "-Werror" from the environment
+subdir-ccflags-y += $(KERNWARNFLAGS)
+
+# COSAI BEGIN BLOCK
+subdir-ccflags-y += -I$(M)/../cosai
+# COSAI END BLOCK -
+
+# Pass some ifdefs to configure build a little
+#subdir-ccflags-y += -DLBP_PROTOCOL_ON
+#subdir-ccflags-y += -DRDK_SUPPORT
+
+# Bake some information about who built the module(s), and what version
+# of the source code they started with. Possibly useful during debug.
+subdir-ccflags-y += -DBUILD_NUMBER=\"'$(VCASS_BUILDNO)'\"
+subdir-ccflags-y += -DBUILD_BYWHOM=\"'$(VCASS_BUILTBY)'\"
+subdir-ccflags-y += -DBUILD_ONDATE=\"'$(VCASS_BUILTON)'\"
+subdir-ccflags-y += -DBUILD_VERSION=\"'$(or $(VCASS_VERSION),0.0) ($(VCASS_BUILTBY))'\"
+
+# Code common with the host mustn't use CONFIG_M[LK]1OM directly.
+# But of course it does anyway. Arrgh.
+subdir-ccflags-$(CONFIG_ML1OM) += -DVCA_IS_L1OM
+subdir-ccflags-$(CONFIG_MK1OM) += -DVCA_IS_K1OM
+ifeq ($(VCA_CARD_ARCH),l1om)
+subdir-ccflags-y += -DVCA_IS_L1OM -DCONFIG_ML1OM
+endif
+ifeq ($(VCA_CARD_ARCH),k1om)
+subdir-ccflags-y += -DVCA_IS_K1OM -DCONFIG_MK1OM
+endif
+
+# a shorthand for "runs on the card"?
+subdir-ccflags-$(CONFIG_X86_VCAPCI) += -D_VCA_SCIF_
+
+# "runs on the host"
+subdir-ccflags-$(not-$(CONFIG_X86_VCAPCI)) += -DHOST -DUSE_VCONSOLE
+
+# always set? what's this thing's purpose?
+subdir-ccflags-y += -D__LINUX_GPL__ -D_MODULE_SCIF_
+
+subdir-ccflags-y += -I$(M)/include
+
+subdir-ccflags-y += -fstack-protector -O2 -D_FORTIFY_SOURCE=2 -Wformat
+ldflags-y += -z noexecstack -z relro -z now
+
+obj-$(CONFIG_X86_VCAPCI) += vca/bus/
+obj-$(CONFIG_X86_VCAPCI) += vca/vop/
+obj-$(CONFIG_X86_VCAPCI) += vca/blockio/
+obj-$(CONFIG_X86_VCAPCI) += plx87xx.o
+obj-$(CONFIG_X86_VCAPCI) += plx87xx_dma.o
+
+#obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca.o
+
+obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/bus/
+obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/vca_csm/
+obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/vca_mgr/
+obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/vca_mgr_extd/
+obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/vca_csa/
+obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/vca_virtio/
+obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/vop/
+obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/blockio/
+obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/pxe/
+obj-$(m-not-$(CONFIG_X86_VCAPCI)) += plx87xx.o
+obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/plx87xx_dma/
+
+plx87xx-objs :=
+plx87xx-objs += vca/plx87xx/plx_main.o
+plx87xx-objs += vca/plx87xx/plx_boot.o
+plx87xx-objs += vca/plx87xx/plx_hw.o
+plx87xx-objs += vca/plx87xx/plx_debugfs.o
+plx87xx-objs += vca/plx87xx/plx_procfs.o
+plx87xx-objs += vca/plx87xx/plx_intr.o
+plx87xx-objs += vca/plx87xx/plx_alm.o
+plx87xx-objs += vca/plx87xx/plx_lbp.o
+plx87xx-objs += vca/plx87xx/plx_hw_ops_blockio.o
+plx87xx-objs += vca/plx87xx/plx_hw_ops_pxe.o
+plx87xx-objs += vca/plx87xx/plx_hw_ops_vca_mgr.o
+plx87xx-objs += vca/plx87xx/plx_hw_ops_vca_mgr_extd.o
+plx87xx-objs += vca/plx87xx/plx_hw_ops_vca_csa.o
+plx87xx-objs += vca/plx87xx/plx_hw_ops_vca_csm.o
+plx87xx-objs += vca/plx87xx/plx_hw_ops_vop.o
+
+plx87xx_dma-objs :=
+plx87xx_dma-objs += vca/plx87xx_dma/plx_pci.o
+plx87xx_dma-objs += vca/plx87xx_dma/plx_dma.o
+plx87xx_dma-objs += vca/plx87xx_dma/plx_debugfs.o
+
+version-le = $(shell printf '%s\n' $(1) | sort -t. -k 1,1n -k 2,2n -k 3,3n -k 4,4n -c >/dev/null 2>&1 && echo t)
+ifeq ($(call version-le, 2.6.23 $(KERNELRELEASE)),t)
+ccflags-y += $(vca-cflags)
+else
+$(error building against kernels <= 2.6.23 is broken)
+endif
