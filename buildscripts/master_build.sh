@@ -81,7 +81,7 @@ parse_parameters(){
 build(){
 	local DISTRO BASE_IMG_VER COMPONENT COMPONENT_PARAM
 	local DOCKER_BUILD_ARGS DOCKER_RUN_ARGS DOCKERFILE_NAME
-	local KNAME KNAME_PREFIX DOCKER_CONTEXT_DIR
+	local KNAME KNAME_PREFIX DOCKER_CONTEXT_DIR BUILDSCRIPTS_DIR
 	DISTRO="$1"
 	BASE_IMG_VER="$2"
 	COMPONENT="$3"
@@ -90,7 +90,12 @@ build(){
 		echo "Configuration $* not selected by --only-pattern"
 		return
 	fi
-	DOCKERFILE_NAME="${VCA_IN_DIR}/Dockerfiles/build_${DISTRO}.dockerfile"
+	if is_release_pkg_in_use; then
+		BUILDSCRIPTS_DIR="${VCA_IN_DIR}"
+	else
+		BUILDSCRIPTS_DIR="${VCA_IN_DIR}"/buildscripts
+	fi
+	DOCKERFILE_NAME="${BUILDSCRIPTS_DIR}/Dockerfiles/build_${DISTRO}.dockerfile"
 	case "${DISTRO}" in
 		centos) KNAME_PREFIX='kernel-' ;;
 		ubuntu) KNAME_PREFIX='kernel_' ;;
@@ -116,8 +121,8 @@ build(){
 
 	# build docker image
 	DOCKER_CONTEXT_DIR="$(mktemp -d)"
-	cp "${VCA_IN_DIR}"/build.sh	"${DOCKER_CONTEXT_DIR}"/build.sh
-	cp "${DOCKERFILE_NAME}"		"${DOCKER_CONTEXT_DIR}"/Dockerfile
+	cp "${BUILDSCRIPTS_DIR}"/build.sh "${DOCKER_CONTEXT_DIR}"/build.sh
+	cp "${DOCKERFILE_NAME}" "${DOCKER_CONTEXT_DIR}"/Dockerfile
 	chmod +x "${DOCKER_CONTEXT_DIR}"/build.sh
 	docker build --tag="${KNAME}" "${DOCKER_BUILD_ARGS[@]}" "${DOCKER_CONTEXT_DIR}"
 	rm -rf "${DOCKER_CONTEXT_DIR}"
@@ -140,12 +145,23 @@ build(){
 		--vca-src-dir	/vca-input
 }
 
+# detect if script was invoked from extracted release package
+# (other supported working mode is from source (like git repo))
+is_release_pkg_in_use(){
+	find_one "${VCA_IN_DIR}" -type f -name 'vca_apps*' &>/dev/null
+}
+
 ensure_that_there_is_at_least_one_file_within_dir(){
 	local _DIR; _DIR="$1"
 	[ -d "${_DIR}" ] || die "${_DIR} is not a directory, but was provided as input directory for $0"
-	# empty grep pattern fails only for empty input, head is to avoid listing really big tree structures
-	find "${_DIR}" -type f | head -1 | grep -q '' \
-		|| die "${_DIR} does not contain any files, but was provided as input directory for $0"
+	(
+		set +o pipefail # ignore writing to closed pipe error, common for 'find | head -1'
+		# empty grep pattern fails only for empty input, head is to avoid listing really big tree structures
+		find "${_DIR}" -type f | head -1 | grep -q '' || {
+			echo "${_DIR} does not contain any files, but was provided as input directory for $0" >&2
+			return 3
+		}
+	)
 }
 
 # make --env or --build-arg for docker run/build

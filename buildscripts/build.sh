@@ -23,7 +23,7 @@ DISTRO=
 EXTRACT_DIR=
 KERNEL_DIR=
 MODULES_DIR=
-SCRIPT_DIR=
+PATCHES_DIR=
 
 usage(){
 echo -n 'Mandatory arguments:
@@ -89,6 +89,7 @@ extract_release_package(){
 	APPS_DIR="${EXTRACT_DIR}"/apps
 	BUILDSCRIPTS_DIR="${EXTRACT_DIR}"/buildscripts
 	MODULES_DIR="${EXTRACT_DIR}"/modules
+	PATCHES_DIR="${VCA_IN_DIR}"
 
 	mkdir -p "${APPS_DIR}" "${BUILDSCRIPTS_DIR}" "${MODULES_DIR}"
 	# get PKG_VER from string like: path"${BUILDSCRIPTS_DIR}"_2.6.265_src.tar.gz
@@ -101,9 +102,10 @@ extract_release_package(){
 
 # set paths, needed when building from sources (git repo)
 set_component_dirs(){
-	APPS_DIR="$(realpath "${SCRIPT_DIR}"/../apps)"
-	BUILDSCRIPTS_DIR="$(realpath "${SCRIPT_DIR}")"
-	MODULES_DIR="$(realpath "${SCRIPT_DIR}"/../modules)"
+	APPS_DIR="$(realpath "${VCA_IN_DIR}"/apps)"
+	BUILDSCRIPTS_DIR="$(realpath "${VCA_IN_DIR}"/buildscripts)"
+	MODULES_DIR="$(realpath "${VCA_IN_DIR}"/modules)"
+	PATCHES_DIR="$(realpath "${VCA_IN_DIR}"/patches)"
 	ensure_that_there_is_at_least_one_file_within_dir "${APPS_DIR}"
 	ensure_that_there_is_at_least_one_file_within_dir "${BUILDSCRIPTS_DIR}"
 	ensure_that_there_is_at_least_one_file_within_dir "${MODULES_DIR}"
@@ -111,9 +113,9 @@ set_component_dirs(){
 
 build_kernel(){
 (
-	VCA_PATCH_DIR="${VCA_IN_DIR}/${DISTRO}_with_kernel_${KER_VER}"
+	VCA_PATCH_DIR="$(find_one "${PATCHES_DIR}" -type d -name "kernel-${KER_VER}")"
 	if [ "${DISTRO}" = centos ]; then
-		VCA_DOT_CONFIG_FILE="$(find_one "${VCA_IN_DIR}" -name "kernel*${KER_VER}-vca.config" -type f)"
+		VCA_DOT_CONFIG_FILE="$(find_one "${VCA_PATCH_DIR}" -name "kernel*${KER_VER}-vca.config" -type f)"
 	fi
 	if [[ ! "${KER_VER}" =~ ^3 ]]; then
 		# version 4.19.0 is released as linux-4.19, so remove potential .0 suffix from KER_VER
@@ -161,6 +163,15 @@ build_image(){
 	if [ "${DISTRO}" = ubuntu ]; then
 		local _ARTIFACTS_DIR _BASE_IMG_VER
 		_BASE_IMG_VER="$(grep -Po 'VERSION_ID="?\K[^"]+' < /etc/os-release)" # like 18.04
+		if [ -s "${OUT_DIR}/deb.tar" ] || [ -s "${OUT_DIR}/base.tar" ]; then
+			echo -e "\nArchiving Intermediate Software Archives (SAs) from previous run\n"
+			# keep only last backup from each day (to save space - ~181MB from one day)
+			local _OLD_DIR
+			_OLD_DIR="${OUT_DIR}/snapshots-of-software-archives-$(date +%F)"
+			mkdir -p "${_OLD_DIR}"
+			publish_files mv "${OUT_DIR}" "${_OLD_DIR}" deb.tar base.tar
+			rm -rf "${OUT_DIR}"/vca-on-the-fly.tar
+		fi
 		"${BUILDSCRIPTS_DIR}"/create_sw_archives.sh \
 			--base-and-bootstrap-only \
 			-d "UBUNTU ${_BASE_IMG_VER}" \
@@ -173,7 +184,7 @@ build_image(){
 			"kernel-${KER_VER}*VCA*rpm" "linux-image-${KER_VER}*vca*deb" \
 			"vcass-modules-${KER_VER}*VCA*rpm" "vcass-modules-${KER_VER}*vca*deb"
 		cd "${OUT_DIR}" # cd to directory with SAs, as workaround for no option to specify location of SAs
-		ARTIFACTS_DIR="${_ARTIFACTS_DIR}" DIST="${_BASE_IMG_VER}" OUT"${OUT_DIR}" SKIP_INITIAL_CLEANUP=yes OS=UBUNTU FEATURE=STD "${BUILDSCRIPTS_DIR}"/quickbuild/generate_images.sh
+		ARTIFACTS_DIR="${_ARTIFACTS_DIR}" DIST="${_BASE_IMG_VER}" OUT="${OUT_DIR}" SKIP_INITIAL_CLEANUP=yes OS=UBUNTU FEATURE=STD "${BUILDSCRIPTS_DIR}"/quickbuild/generate_images.sh
 		echo -e "\n\nIntermediate Software Archives (SAs) were saved in ${OUT_DIR}, next build will recreate them. If for any reason do you want to reproduce exactly this build, keep them for reuse (manual execution of generate_images.sh would be necessary)\n" >&2
 	fi
 )}
@@ -198,22 +209,26 @@ publish_files(){
 ensure_that_there_is_at_least_one_file_within_dir(){
 	local _DIR; _DIR="$1"
 	[ -d "${_DIR}" ] || die "${_DIR} is not a directory, but was provided as input directory for $0"
-	# empty grep pattern fails only for empty input, head is to avoid listing really big tree structures
-	find "${_DIR}" -type f | head -1 | grep -q '' || {
-		echo "${_DIR} does not contain any files, but was provided as input directory for $0" >&2
-		return 3
-	}
+	(
+		set +o pipefail # ignore writing to closed pipe error, common for 'find | head -1'
+		# empty grep pattern fails only for empty input, head is to avoid listing really big tree structures
+		find "${_DIR}" -type f | head -1 | grep -q '' || {
+			echo "${_DIR} does not contain any files, but was provided as input directory for $0" >&2
+			return 3
+		}
+	)
 }
 
 # run $1 almost silently (2 stdout lines + whole stderr still will be reported)
 silent(){
 	local _FUN; _FUN="$1"
 	shift
-	echo "** calling ${_FUN}"
+	echo "** calling ${_FUN} $*"
 	# keep last stdout line, to make it clear that build was ok even with warnings present
 	${_FUN} "$@" \
 		| tail -1 \
 		| awk "{ print \"[last line of ${_FUN}()]:\", \$0 }"
+	return ${PIPESTATUS[0]}
 }
 
 # same as find, but ensure that there is exactly one output line (file or dir)
@@ -226,15 +241,20 @@ find_one(){
 		}}'
 }
 
+# detect if script was invoked from extracted release package
+# (other supported working mode is from source (like git repo))
+is_release_pkg_in_use(){
+	find_one "${VCA_IN_DIR}" -type f -name 'vca_apps*' &>/dev/null
+}
+
 main(){
 	local _EXTRACT_RELEASE_PACKAGE_ERRORS
-	SCRIPT_DIR="$(realpath "$(dirname "$0")")"
 	EXTRACT_DIR="${EXTRACT_DIR:-$(mktemp -d)/extract-dir}" # more than one level, to workaround "../output" (hardcoded) default in some scripts
 	BOOST_ROOT="${BOOST_ROOT:-${EXTRACT_DIR}/${BOOST_VER}}"
 	KERNEL_DIR="${EXTRACT_DIR}"/kernel
 	mkdir -p "${BOOST_ROOT}" "${KERNEL_DIR}"
 
-	if find_one "${VCA_IN_DIR}" -type f -name 'vca_apps*' &>/dev/null; then
+	if is_release_pkg_in_use; then
 		extract_release_package
 	else
 		echo 'It looks that you are building from repository, becasue content expected to be extracted from release package zip archive was not found' >&2
