@@ -61,6 +61,7 @@ namespace vca
 		{{0xbc5a48da, 0}, "VCAC-A 1.1"},
 		{{0x687d552e, 0}, "VCAC-A 1.2"},
 		{{0x6cc483ef, 0}, "VCAC-A 1.3"},
+		{{0xc247bc29, 0}, "VCAC-A 1.4, broken, please downgrade to version 1.3"},
 		// VCGA
 		{{0xB60C70FD, 0}, "VCAC-R 1.0"},
 		{{0x89e39209, 0}, "VCAC-R 1.1"},

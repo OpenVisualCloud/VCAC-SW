@@ -98,6 +98,12 @@
 #define BLOCKIO_MODE_RAMDISK	"ramdisk"
 #define BLOCKIO_BOOT_DEV_NAME	"vcablk0"
 
+#define PXE_CMD		"pxe"
+#define PXE_SUBCMD_ENABLE	"enable"
+#define PXE_SUBCMD_DISABLE	"disable"
+#define PXE_SUBCMD_STATUS	"status"
+#define PXE_BOOT_DEV_NAME	"vcapxe"
+
 #define GOLD_CMD		"golden-BIOS"
 
 #define BIOS_VERSION_ERROR	"00000000"

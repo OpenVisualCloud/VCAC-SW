@@ -47,6 +47,7 @@ set (vcactld_sources ${PROJECT_SOURCE_DIR}/src/vcassd.c
 set (helper_sources ${PROJECT_SOURCE_DIR}/src/helper_funcs.cpp
                     ${PROJECT_SOURCE_DIR}/src/vca_config_parser.cpp
                     ${PROJECT_SOURCE_DIR}/src/vca_devices.cpp
+                    ${PROJECT_SOURCE_DIR}/src/vca_pxe.cpp
                     ${PROJECT_SOURCE_DIR}/src/vca_blockio_ctl.cpp)
 set (vcactl_headers ${PROJECT_SOURCE_DIR}/src/vcactrl.h
                     ${PROJECT_SOURCE_DIR}/src/log_args.h
@@ -59,6 +60,7 @@ set (helper_headers ${PROJECT_SOURCE_DIR}/src/helper_funcs.h
                     ${PROJECT_SOURCE_DIR}/src/vca_defs.h
                     ${PROJECT_SOURCE_DIR}/src/vca_config_parser.h
                     ${PROJECT_SOURCE_DIR}/src/vca_devices.h
+                    ${PROJECT_SOURCE_DIR}/src/vca_pxe.h
                     ${PROJECT_SOURCE_DIR}/src/vca_blockio_ctl.h)
 
 # adding OSAL (OS abstraction layer)
@@ -159,6 +161,7 @@ message(STATUS "CMAKE_RUNTIME_OUTPUT_DIRECTORY = ${CMAKE_RUNTIME_OUTPUT_DIRECTOR
 include_directories ("${PROJECT_SOURCE_DIR}/src")
 include_directories ("${MODULES_SRC}/vca/common")
 include_directories ("${MODULES_SRC}/vca/blockio")
+include_directories ("${MODULES_SRC}/vca/pxe")
 include_directories ("${MODULES_SRC}/vca/vca_virtio/uapi")
 include_directories(${Boost_INCLUDE_DIRS})
 

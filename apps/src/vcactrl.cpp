@@ -42,9 +42,12 @@
 #include "vca_config_parser.h"
 #include "vca_eeprom_update.h"
 #include "vca_blockio_ctl.h"
+#include "vca_pxe.h"
 #include "vca_devices.h"
 #include "log_args.h"
 #include "version.h"
+
+#include <sys/mman.h>
 
 #define VCASYSFSDIR						"/sys/class/vca"
 #define LINK_DOWN_STATE					"link_down"
@@ -62,7 +65,6 @@
 #define BOARD_ID_INVALID 0xff
 
 #define LINK_DOWN_WORKAROUND
-#define LINK_DOWN_WORKAROUND_PDC
 
 #define SN_MAX 30
 
@@ -845,6 +847,8 @@ const char* get_csm_ioctl_name(unsigned long ioctl_cmd)
 		return "LBP_BOOT_LBPDISK";
 	case VCA_GET_MEM_SIZE:
 		return "VCA_GET_MEM_SIZE";
+	case LBP_BOOT_VIA_PXE:
+		return "LBP_BOOT_VIA_PXE";
 	default:
 		LOG_DEBUG("csm ioctl command name for %lx not found!\n", ioctl_cmd);
 		return "";
@@ -911,7 +915,7 @@ bool stop_csm(filehandle_t cpu_fd, const caller_data & d)
 	return true;
 }
 
-bool get_mac_addr(filehandle_t cpu_fd, const caller_data & d, char mac_addr[6])
+bool get_mac_addr(filehandle_t cpu_fd, const caller_data & d, unsigned char mac_addr[6])
 {
 	d.LOG_CPU(DEBUG_INFO, "GETTING MAC ADDRESS!\n");
 	vca_csm_ioctl_mac_addr_desc desc;
@@ -960,10 +964,6 @@ static std::string get_cpu_state(caller_data d)
 	std::string const state = read_cpu_sysfs(d, "state");
 	if (is_link_up(d))
 		return state;
-#ifdef LINK_DOWN_WORKAROUND_PDC
-	if (get_card_type(d.card_id) == VCA_VCGA)
-		return VCA_POWER_DOWN_TEXT;
-#endif
 	return (state == VCA_POWER_DOWN_TEXT)? state : LINK_DOWN_STATE;
 }
 
@@ -1711,170 +1711,122 @@ bool parse_nfs_path(const caller_data & d, std::string& path)
 	return true;
 }
 
-bool pass_script(const caller_data & d, char mac_addr[6])
-{
-	std::string card_script;
-	const char *node_name;
-	std::string nfs_path, nfs_server;
-	std::string net_cfg_cmd, net_cfg_path, sys_cfg_cmd;
-
-	// gathering data
-	const char* script_path = get_cpu_field_if_not_empty(d, cpu_fields::script_path, true);
-	if (script_path && !file_exists(script_path))
-		return false;
-
-	const char *ip = get_cpu_field_if_not_empty(d, cpu_fields::ip);
-	if (!ip)
-		return false;
-
-	const char *mask = get_cpu_field_if_not_empty(d, cpu_fields::mask);
-	if (!mask || !is_unsigned_number(mask))
-		return false;
-
-	// to validate mask number range
-	int imask = atoi(mask);
-	if (imask < 0 || imask > 32)
-		return false;
-
-	const char *gateway = get_cpu_field_if_not_empty(d, cpu_fields::gateway);
-	if (!gateway || !is_ip_address(gateway))
-		return false;
-
-	node_name = get_cpu_field_if_not_empty(d, cpu_fields::node_name);
-
-	const char *nfs_server_data = get_cpu_field_if_not_empty(d, cpu_fields::nfs_server);
-	if (nfs_server_data) {
-		nfs_server = nfs_server_data;
-		strip_quotes(nfs_server);
+static bool make_net_config_windows(const caller_data& d,char const* mac,char const* ip,char const* mask,const char* gateway){
+	std::string path= std::string(VCASYSFSDIR) + "/vca"
+		+ int_to_string( d.card_id) + int_to_string( d.cpu_id) + "/net_config_windows";
+	if (close_on_exit fd = open_path(path.c_str(), O_WRONLY|O_SYNC)) {
+		std::string card_script;
+		card_script+=std::string()
+			+ "ip=" + ip +"\n"
+			+ "mask=" + mask+ "\n"
+			+ "gateway=" + gateway + "\n"
+			+ "mtu=" MTU_VALUE "\n";
+		if( write( fd, card_script.c_str(), card_script.length())==(int) card_script.length())
+			return true; // SUCCESS
+		d.LOG_CPU_ERROR( "Write to %s\n", path.c_str());
 	}
+	return false;
+}
 
-	const char *nfs_path_data = get_cpu_field_if_not_empty(d, cpu_fields::nfs_path);
-	if (nfs_path_data)
-		nfs_path = nfs_path_data;
-
-	if (!parse_nfs_path(d, nfs_path)) {
-		d.LOG_CPU_ERROR("Problems during processing NFS path %s\n", nfs_path.c_str());
-	}
-
-	char buf[256];
-	snprintf(buf, 18,"%x:%x:%x:%x:%x:%x",
-		(unsigned char)mac_addr[0], (unsigned char)mac_addr[1], (unsigned char)mac_addr[2],
-		(unsigned char)mac_addr[3], (unsigned char)mac_addr[4], (unsigned char)mac_addr[5]);
-
-	// passing network configuration for Windows
-
-	net_cfg_path = std::string(VCASYSFSDIR) + "/vca"
-		+ int_to_string(d.card_id) + int_to_string(d.cpu_id) + "/net_config_windows";
-
-	card_script.append("ip=" + char_to_string((char*)ip) + "\n");
-	card_script.append("mask=" + char_to_string((char*)mask) + "\n");
-	card_script.append("gateway=" + char_to_string((char*)gateway) + "\n");
-	card_script.append("mtu=" + std::string(MTU_VALUE));
-
-	net_cfg_cmd = std::string(STDBUF " -o 1024 " ECHO " \"")
-		+ card_script + "\" > " + net_cfg_path;
-
-	if (run_cmd(net_cfg_cmd.c_str()) == FAIL) {
-		LOG_ERROR("Cannot execute: %s\n", net_cfg_cmd.c_str());
-		return false;
-	}
-
-	// passing network configuration for Linux
-
-	if (strncasecmp(DHCP_STRING, ip, strlen(DHCP_STRING)) == 0) {
-		card_script = std::string("#!/bin/bash\n")
-			+ IP " link set " INTERFACE_NAME " mtu " MTU_VALUE "\n"
-			+ IP " link set dev " INTERFACE_NAME " address " + buf + "\n"
-			+ IP " link set dev " INTERFACE_NAME " up\n"
-			+ ECHO " \'" + nfs_server + "\' > /etc/nfs_server\n"
-			+ ECHO " \'" + nfs_path + "\' > /etc/nfs_path\n"
-			+ ECHO " " VCA_DHCP_IN_PROGRESS_TEXT
-			+ " > /sys/class/vca/vca/state\n"
-			+ "if [ ! -d /var/lib/dhclient ] ; then "
-			+ MKDIR " -p /var/lib/dhclient ; fi\n"
-			+ DHCLIENT + " " + INTERFACE_NAME + "\n"
-			+ "if [ -s /var/lib/dhclient/dhclient.leases ]; then "
-			+ ECHO " " VCA_DHCP_DONE_TEXT
-			+ " > /sys/class/vca/vca/state; else "
-			+ ECHO " " VCA_DHCP_ERROR_TEXT
-			+ " > /sys/class/vca/vca/state; fi";
-	}
-	else if (is_ip_address(ip)) {
-		card_script = std::string("#!/bin/bash\n")
-			+ IP " link set " INTERFACE_NAME " mtu " MTU_VALUE "\n"
-			+ IP " addr add " + ip + "/" + int_to_string(imask) + " dev " INTERFACE_NAME "\n"
-			+ IP " link set dev " INTERFACE_NAME " address " + buf + "\n"
-			+ IP " link set dev " INTERFACE_NAME " up\n"
-			+ IP " route add " + gateway + " dev " INTERFACE_NAME "\n"
-			+ IP " route add default via " + gateway + "\n"
-			+ ECHO " \'" + nfs_server + "\' > /etc/nfs_server\n"
-			+ ECHO " \'" + nfs_path + "\' > /etc/nfs_path";
-	}
-	else {
-		d.LOG_CPU_ERROR("Wrong network configuration.");
-		return false;
-	}
-
-	if (node_name) {
-		card_script.append("\n" ECHO " \'");
-		card_script.append(node_name);
-		card_script.append("\' > /proc/sys/kernel/hostname \n");
-	}
-
-	net_cfg_path = std::string(VCASYSFSDIR) + "/vca"
+static bool make_net_config(const caller_data& d,char const* mac,char const* ip,char const* mask,const char* gateway){
+	std::string net_cfg_path = std::string(VCASYSFSDIR) + "/vca"
 		+ int_to_string(d.card_id) + int_to_string(d.cpu_id) + "/net_config";
-
-	net_cfg_cmd = std::string(STDBUF " -o 1024 " ECHO " \"")
-		+ card_script + "\" > " + net_cfg_path;
-
-	if (run_cmd(net_cfg_cmd.c_str()) == FAIL) {
-		LOG_ERROR("Cannot execute: %s\n", net_cfg_cmd.c_str());
-		return false;
-	}
-
-	const char *va_free_mem_enable = get_cpu_field_if_not_empty(d, cpu_fields::va_free_mem);
-	if (va_free_mem_enable) {
-		std::string va_free_mem_bit = std::string(va_free_mem_enable);
-		if (va_free_mem_bit == "1" && script_path) {
-
-			sys_cfg_cmd = CAT " " + std::string(script_path) + " > " + TMP_BUFFER_FILE;
-			if (run_cmd(sys_cfg_cmd.c_str()) == FAIL) {
-				LOG_ERROR("Cannot execute: %s\n", sys_cfg_cmd.c_str());
-				return false;
-			}
-
-			sys_cfg_cmd = ECHO " sysctl -w vm.min_free_kbytes=" MIN_MEM_FREE_OF_CACHE_CARD_SIDE
-				" >> " TMP_BUFFER_FILE;
-			if (run_cmd(sys_cfg_cmd.c_str()) == FAIL) {
-				LOG_ERROR("Cannot execute: %s\n", sys_cfg_cmd.c_str());
-				return false;
-			}
-
-			sys_cfg_cmd = OVERWRITE " "  TMP_BUFFER_FILE " " VCASYSFSDIR "/vca" +
-				int_to_string(d.card_id) + int_to_string(d.cpu_id) + "/sys_config "
-				DOUBLE_AMPERSAND " " RM_FORCE " " TMP_BUFFER_FILE;
+	if (close_on_exit fd = open_path(net_cfg_path.c_str(), O_WRONLY|O_SYNC)) {
+		std::string nfs_server= get_cpu_field_if_not_empty(d, cpu_fields::nfs_server) ?: "";
+		strip_quotes(nfs_server);
+		std::string nfs_path= get_cpu_field_if_not_empty(d, cpu_fields::nfs_path) ?: "";
+		if( !parse_nfs_path(d, nfs_path)) {
+			d.LOG_CPU_WARN( "Problems during processing NFS path %s\n", nfs_path.c_str());
 		}
-		else if (va_free_mem_bit == "1") {
-			sys_cfg_cmd = ECHO " sysctl -w vm.min_free_kbytes=" MIN_MEM_FREE_OF_CACHE_CARD_SIDE
-				" > " VCASYSFSDIR "/vca" + int_to_string(d.card_id) + int_to_string(d.cpu_id)
-				+ "/sys_config";
+		std::string card_script= "#!/bin/bash\n"
+				"trap 'echo -e \"Error ${BASH_COMMAND}\" >&2' ERR\n"
+				"INTERFACE=`basename /sys/class/vca/vca/device/vop-dev0255/virtio0/net/*`\n";
+		if( strncasecmp( DHCP_STRING, ip, strlen( DHCP_STRING)) == 0) {
+			card_script+= std::string()+
+				IP " link set ${INTERFACE} mtu " MTU_VALUE "\n"
+				IP " link set dev ${INTERFACE} address " + mac + "\n"
+				IP " link set dev ${INTERFACE} up\n"
+				ECHO " \'" + nfs_server + "\' > /etc/nfs_server\n"
+				ECHO " \'" + nfs_path + "\' > /etc/nfs_path\n"
+				ECHO " " VCA_DHCP_IN_PROGRESS_TEXT " > /sys/class/vca/vca/state\n"
+				"if [ ! -d /var/lib/dhclient ] ; then "
+				MKDIR " -p /var/lib/dhclient ; fi\n"
+				DHCLIENT " ${INTERFACE}\n"
+				"if [ -s /var/lib/dhclient/dhclient.leases ]; then "
+				ECHO " " VCA_DHCP_DONE_TEXT " > /sys/class/vca/vca/state; else "
+				ECHO " " VCA_DHCP_ERROR_TEXT " > /sys/class/vca/vca/state; fi\n";
 		}
-	}
-	else {
-		if (script_path) {
-			sys_cfg_cmd = CAT " " + std::string(script_path) + " > " + VCASYSFSDIR + "/vca" +
-				int_to_string(d.card_id) + int_to_string(d.cpu_id) + "/sys_config";
+		else if( is_ip_address( ip)) {
+			int imask = atoi(mask);
+			if (imask < 0 || imask > 32)
+				return false;
+			card_script+= std::string()+
+				IP " link set ${INTERFACE} mtu " MTU_VALUE "\n"
+				IP " link set dev ${INTERFACE} address " + mac + "\n"
+				IP " addr add " + ip + "/" + int_to_string(imask) + " dev ${INTERFACE}\n"
+				IP " link set dev ${INTERFACE} up\n"
+				IP " route add " + gateway + " dev ${INTERFACE}\n"
+				IP " route add default via " + gateway + "\n"
+				ECHO " \'" + nfs_server + "\' > /etc/nfs_server\n"
+				ECHO " \'" + nfs_path + "\' > /etc/nfs_path\n";
 		}
 		else {
-			sys_cfg_cmd = ECHO " \"\" > " VCASYSFSDIR "/vca" +
-				int_to_string(d.card_id) + int_to_string(d.cpu_id) + "/sys_config";
+			d.LOG_CPU_ERROR("Wrong ip. Use: `vcactl config %u %u ip`\n", d.card_id, d.cpu_id);
+			return false;
 		}
+		if(const char *node_name= get_cpu_field_if_not_empty( d, cpu_fields::node_name)) {
+			card_script.append( ECHO " \'");
+			card_script.append(node_name);
+			card_script.append("\' > /proc/sys/kernel/hostname \n");
+		}
+		if( write( fd, card_script.c_str(), card_script.length())==(int) card_script.length())
+			return true; // SUCCESS
+		d.LOG_CPU_ERROR( "Write to %s\n", net_cfg_path.c_str());
 	}
+	return false;
+}
 
-	if (run_cmd(sys_cfg_cmd.c_str()) == FAIL)
-		LOG_ERROR("Cannot execute: %s\n", sys_cfg_cmd.c_str());
+static bool make_sys_config(const caller_data& d){
+	std::string path = std::string(VCASYSFSDIR) + "/vca"
+		+ int_to_string(d.card_id) + int_to_string(d.cpu_id) + "/sys_config";
+	if (close_on_exit fd = open_path(path.c_str(), O_WRONLY|O_SYNC)) {
+		std::string sys_cfg_cmd= "#!/bin/bash\ntrap 'echo -e \"Error ${BASH_COMMAND}\" >&2' ERR\n";
+		if(const char* script_path = get_cpu_field_if_not_empty(d, cpu_fields::script_path, true)) {
+			if(close_on_exit fd= open_path( script_path, O_RDONLY)) {
+				struct stat info; fstat( fd, &info);
+				if(char const* const b=(char*) mmap( 0, info.st_size, PROT_READ, MAP_SHARED, fd, 0)) {
+					sys_cfg_cmd.append( b, info.st_size);
+					munmap((void*) b, info.st_size);
+				}
+				else d.LOG_CPU_WARN("mmap %s\n", path.c_str());;
+			}
+			else d.LOG_CPU_WARN("open %s\n", path.c_str());;
+		}
+		if(const char *va_free_mem_enable = get_cpu_field_if_not_empty(d, cpu_fields::va_free_mem))
+			if( !strcmp( va_free_mem_enable, "1"))
+				sys_cfg_cmd+= "sysctl -w vm.min_free_kbytes=" MIN_MEM_FREE_OF_CACHE_CARD_SIDE "\n";
+		if( write( fd, sys_cfg_cmd.c_str(), sys_cfg_cmd.length())==(int) sys_cfg_cmd.length())
+			return true; // SUCCESS
+		d.LOG_CPU_ERROR("Write to %s\n", path.c_str());
+	}
+	return false;
+}
 
-	return true;
+static bool pass_script(const caller_data& d, char unsigned mac_addr[6])
+{
+	char mac[19];
+	snprintf( mac, 18,"%02x:%02x:%02x:%02x:%02x:%02x",
+		mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+	if(const char *ip = get_cpu_field_if_not_empty(d, cpu_fields::ip) )
+		if(const char* mask = get_cpu_field_if_not_empty(d, cpu_fields::mask))
+			if(const char* gateway = get_cpu_field_if_not_empty(d, cpu_fields::gateway))
+				return make_sys_config( d)
+					&& make_net_config( d, mac, ip, mask, gateway)
+					&& make_net_config_windows( d, mac, ip, mask, gateway);
+			else d.LOG_CPU_ERROR("Missing gateway. Use `vcactl config %u %u gateway`\n", d.card_id, d.cpu_id);
+		else d.LOG_CPU_ERROR("Missing mask. Use `vcactl config %u %u mask`\n", d.card_id, d.cpu_id);
+	else d.LOG_CPU_ERROR("Missing IP. Use `vcactl config  %u %u ip`\n", d.card_id, d.cpu_id);
+	return false;
 }
 
 const char * try_get_path(const caller_data & d, const data_field & data)
@@ -2296,10 +2248,15 @@ bool boot(caller_data d)
 
 	char boot_path[PATH_MAX + 1];
 	file_manager::managed_file *file_lbp = NULL;
+	bool boot_pxe = false;
 
 	if (!strcmp(relative_path, BLOCKIO_BOOT_DEV_NAME)) {
 		d.LOG_CPU(DEBUG_INFO, "BOOT BLOCK DEVICE!\n");
 		STRCPY_S(boot_path, relative_path, sizeof(boot_path));
+	} else if (!strcmp(relative_path, PXE_BOOT_DEV_NAME)) {
+		d.LOG_CPU(DEBUG_INFO, "BOOT VIA PXE!\n");
+		STRCPY_S(boot_path, relative_path, sizeof(boot_path));
+		boot_pxe = true;
 	} else {
 		if (!realpath(relative_path, boot_path)) {
 			d.LOG_CPU_ERROR("Cannot canonicalize OS image path (got %s): %s!\n",
@@ -2315,7 +2272,7 @@ bool boot(caller_data d)
 		}
 	}
 
-	char mac_addr[6] = {0};
+	unsigned char mac_addr[6] = {0};
 	enum vca_card_type type = get_card_type(d.card_id);
 	if (type & VCA_PRODUCTION) {
 		std::string state;
@@ -2336,13 +2293,19 @@ bool boot(caller_data d)
 			return false;
 		}
 
-		if (!file_lbp) {
+		if (!file_lbp && !boot_pxe) {
 			close_on_exit blk_dev_fd = open_blk_fd(d.card_id, d.cpu_id);
 			if (!blk_dev_fd)
 				return false;
 
 			if (!check_blk_disk_exist(blk_dev_fd.fd, 0)) {
 				d.LOG_CPU_ERROR("Block device vcablk0 need be in inactive/active state!\n");
+				return false;
+			}
+		} else if (!file_lbp && boot_pxe) {
+			close_on_exit pxe_fd = open_pxe_fd(d.card_id, d.cpu_id);
+			if (!is_pxe_not_inactive(pxe_fd)) {
+				d.LOG_CPU_ERROR("PXE card is not activated!\n");
 				return false;
 			}
 		}
@@ -2394,8 +2357,13 @@ bool boot(caller_data d)
 
 		bool boot_res = false;
 		if (!file_lbp) {
-			d.LOG_CPU(DEBUG_INFO, "TRYING TO BOOT VCABLK0!\n");
-			boot_res = try_ioctl_with_blk(cpu_fd, LBP_BOOT_BLKDISK, d);
+			if (boot_pxe) {
+				d.LOG_CPU(DEBUG_INFO, "TRYING TO BOOT VIA PXE!\n");
+				boot_res = try_ioctl_with_blk(cpu_fd, LBP_BOOT_VIA_PXE, d);
+			} else {
+				d.LOG_CPU(DEBUG_INFO, "TRYING TO BOOT VCABLK0!\n");
+				boot_res = try_ioctl_with_blk(cpu_fd, LBP_BOOT_BLKDISK, d);
+			}
 		} else {
 			d.LOG_CPU(DEBUG_INFO, "TRYING TO BOOT LBP!\n");
 			boot_res = try_ioctl_with_img(cpu_fd, LBP_BOOT_RAMDISK, d, (void*)file_lbp->content, file_lbp->size);
@@ -2427,7 +2395,7 @@ bool boot_USB(caller_data d)
 	config.save_cpu_field(d.card_id, d.cpu_id, "last-os-image", "");
 	d.LOG_CPU(DEBUG_INFO, "Trying boot from USB!\n");
 	enum vca_card_type type = get_card_type(d.card_id);
-	char mac_addr[6] = {0};
+	unsigned char mac_addr[6] = {0};
 	if(type & VCA_PRODUCTION) {
 
 		std::string state;
@@ -2484,7 +2452,7 @@ bool pwrbtn_boot(caller_data d)
 
 	char actual_path[PATH_MAX + 1];
 
-	if (strcmp(img_path, BLOCKIO_BOOT_DEV_NAME) != 0) {
+	if (strcmp(img_path, BLOCKIO_BOOT_DEV_NAME) != 0 && strcmp(img_path, PXE_BOOT_DEV_NAME) != 0) {
 		if (!realpath(img_path, actual_path))
 			d.LOG_CPU_ERROR("Cannot canonicalize OS image path (got %s): %s!\n",
 				img_path, strerror(errno));
@@ -3382,7 +3350,7 @@ bool config_use(caller_data d)
 
 bool config_default(caller_data d)
 {
-	if(command_err || !close_on_exit( open_blk_fd( d.card_id, d.cpu_id)) || is_any_blkdev_enabled( d))
+	if(!close_on_exit( open_blk_fd( d.card_id, d.cpu_id)) || is_any_blkdev_enabled( d))
 		return false;
 
 	return config.save_default_config();
@@ -4837,6 +4805,98 @@ bool blockio_ctl(caller_data d)
 	return true;
 }
 
+bool pxe_ctl_enable(caller_data d)
+{
+	std::string devname = get_pxe_dev_name(d.card_id, d.cpu_id);
+
+	close_on_exit pxe_dev_fd = open_pxe_fd(d.card_id, d.cpu_id);
+	if (!pxe_dev_fd)
+		return false;
+
+	if (!is_pxe_exactly_inactive(pxe_dev_fd)) {
+		d.LOG_CPU_ERROR("PXE network card %s is not in \"inactive\" state.\n",
+				devname.c_str());
+		return false;
+	}
+
+	if (!pxe_enable(pxe_dev_fd)) {
+		d.LOG_CPU_ERROR("Cannot enable PXE network card %s!\n", devname.c_str());
+		return false;
+	} else return true;
+}
+
+bool pxe_ctl_disable(caller_data d)
+{
+	std::string devname = get_pxe_dev_name(d.card_id, d.cpu_id);
+
+	close_on_exit pxe_dev_fd = open_pxe_fd(d.card_id, d.cpu_id);
+	if (!pxe_dev_fd)
+		return false;
+
+	if (is_pxe_exactly_running(pxe_dev_fd)) {
+		d.LOG_CPU_ERROR("PXE network card %s is currently in use by the node! "
+				"Boot using other means and then try again.\n",
+				devname.c_str());
+		return false;
+	}
+
+	if (!is_pxe_exactly_active(pxe_dev_fd)) {
+		d.LOG_CPU_ERROR("PXE network card %s is not in \"active\" state.\n",
+				devname.c_str());
+		return false;
+	}
+
+	if (!pxe_disable(pxe_dev_fd)) {
+		d.LOG_CPU_ERROR("Cannot disable PXE network card %s!\n",
+				devname.c_str());
+		return false;
+	} else return true;
+}
+
+bool pxe_ctl_status(caller_data d)
+{
+	close_on_exit pxe_dev_fd = open_pxe_fd(d.card_id, d.cpu_id);
+	if (!pxe_dev_fd)
+		return false;
+
+	std::string devname = get_pxe_dev_name(d.card_id, d.cpu_id);
+	enum vcapxe_state state = get_pxe_state(pxe_dev_fd);
+	std::string state_str = stringify_pxe_state(state);
+
+	if (state < 0)
+	{
+		d.LOG_CPU_ERROR("Can't get PXE state for device %s.\n", devname.c_str());
+		return false;
+	} else {
+		printf("%s\t%s\n", devname.c_str(), state_str.c_str());
+		return true;
+	}
+}
+
+bool pxe_ctl(caller_data d)
+{
+	d.LOG_CPU(DEBUG_INFO, "Executing " PXE_CMD " %s command.\n", d.args.get_arg(SUBCMD).c_str());
+
+	if (d.args.get_arg(SUBCMD) == PXE_SUBCMD_ENABLE) {
+		if (!pxe_ctl_enable(d))
+			return false;
+	}
+	else if (d.args.get_arg(SUBCMD) == PXE_SUBCMD_DISABLE) {
+		if (!pxe_ctl_disable(d))
+			return false;
+	}
+	else if (d.args.get_arg(SUBCMD) == PXE_SUBCMD_STATUS) {
+		if (!pxe_ctl_status(d))
+			return false;
+	}
+	else {
+		d.LOG_CPU_ERROR("Wrong PXE subcommand!\n");
+		return false;
+	}
+
+	return true;
+}
+
 std::string get_card_gen(const unsigned card_id)
 {
 	enum vca_card_type card_type = get_card_type(card_id);
@@ -4890,6 +4950,11 @@ std::vector<std::string> get_subcmd_list(const char *_cmd)
 		subcommand_list.push_back(BLOCKIO_SUBCMD_LIST);
 		subcommand_list.push_back(BLOCKIO_SUBCMD_OPEN);
 		subcommand_list.push_back(BLOCKIO_SUBCMD_CLOSE);
+	}
+	else if (cmd == PXE_CMD) {
+		subcommand_list.push_back(PXE_SUBCMD_ENABLE);
+		subcommand_list.push_back(PXE_SUBCMD_DISABLE);
+		subcommand_list.push_back(PXE_SUBCMD_STATUS);
 	}
 	else if (cmd == GOLD_CMD) {
 		subcommand_list.push_back("on");
@@ -4945,6 +5010,11 @@ static inline subcmds *get_subcmds(const char *_cmd, const std::vector<std::stri
 		subcmd->add_subcmd(BLOCKIO_SUBCMD_LIST,		"list all blockio devices");
 		subcmd->add_subcmd(BLOCKIO_SUBCMD_OPEN,		"open/create blockio device");
 		subcmd->add_subcmd(BLOCKIO_SUBCMD_CLOSE,	"close blockio device");
+	}
+	else if (cmd == PXE_CMD) {
+			subcmd->add_subcmd(PXE_SUBCMD_ENABLE,		"enable PXE boot network card");
+			subcmd->add_subcmd(PXE_SUBCMD_DISABLE,		"disable PXE boot network card");
+			subcmd->add_subcmd(PXE_SUBCMD_STATUS,	"check PXE boot network card status");
 	}
 	else if (cmd == GOLD_CMD) {
 		subcmd->add_subcmd("on",			"boot golden bios");
@@ -5115,7 +5185,7 @@ parsing_output optional_file(const char *arg, args_holder & holder)
 	if (!strcmp(arg, FORCE_LAST_OS_IMAGE))
 		return NOT_PARSED;
 
-	if (!strcmp(BLOCKIO_BOOT_DEV_NAME, arg)) {
+	if (!strcmp(BLOCKIO_BOOT_DEV_NAME, arg) || !strcmp(PXE_BOOT_DEV_NAME, arg)) {
 		holder.add_arg(FILE_PATH_ARG, arg);
 		return PARSED;
 	}
@@ -5510,6 +5580,8 @@ static cmd_desc const commands_desc[] = {
 	cmd_desc("blockio", "controls blockio devices",
 		new sequential_caller(blockio_ctl), get_subcmds("blockio"), requires_subcommand, optional_card_id, optional_cpu_id,
 						  optional_blockio_id, optional_blockio_type, optional_blockio_type_param),
+	cmd_desc("pxe", "manage PXE boot network cards",
+		new sequential_caller(pxe_ctl), get_subcmds("pxe"), requires_subcommand, optional_card_id, optional_cpu_id),
 	cmd_desc("os-shutdown", "OS shutdown",
 		new sequential_caller(os_shutdown), optional_card_id, optional_cpu_id),
 	cmd_desc("get-BIOS-cfg", "read BIOS configuration",
@@ -5607,7 +5679,7 @@ bool parse_and_execute(const cmd_desc *cmd, args_holder &holder, char *argv[])
 			return true;
 		}
 	}
-	else if (cmd_name == VCA_SYS_INFO_CMD || cmd_name == CONFIG_DEFAULT_CMD ||
+	else if (cmd_name == CONFIG_DEFAULT_CMD || cmd_name == VCA_SYS_INFO_CMD ||
 		(cmd_name == INFO_CMD && (holder.get_arg(SUBCMD) == INFO_SUBCMD_SYSTEM))) {
 		single_call(*cmd->caller, 0, 0, holder);
 		return true;

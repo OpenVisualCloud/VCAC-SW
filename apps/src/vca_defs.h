@@ -27,7 +27,6 @@
 
 #define VCASYSFSDIR	"/sys/class/vca"
 #define VCA_CONFIG_DIR	"/etc/vca_config.d/"
-#define TMP_BUFFER_FILE "/tmp/vca_config_sys_buffer"
 
 #ifndef WIN32
 #define VCA_CONFIG_PATH  VCA_CONFIG_DIR	"vca_config.xml"
@@ -38,7 +37,6 @@
 #define MSG_FIFO_FILE			"/var/run/vcactld"
 #define VCA_REINIT_DEV_CMD		"vca_reinit_dev"
 #define VCA_PING_DAEMON_CMD		"ping_daemon"
-#define VCA_REBOOT_CMD			"reboot"
 #define VCA_CONFIG_USE_CMD		"config_use"
 #define VCA_PWRBTN_BOOT_CMD		"pwrbtn_boot"
 
@@ -49,11 +47,7 @@
 #define IMG_MAX_SIZE			0x10000000	/* 256 MB */
 #define MAX_CPU				3
 #define MAX_CARDS			8
-#define FILE_BEGINNING_OFFSET		0
-#define FILE_END_OFFSET			0
-#define BYTE_LENGTH			8
 #define MODPROBE_TIMEOUT_MS		10000
-#define MAX_PARAMS			32U
 #define MIN_MEM_FREE_OF_CACHE_HOST_SIDE "524288"
 #define TIME_TO_POWER_DOWN_NODE_S	7
 #define SGX_DISABLED			0
@@ -73,15 +67,10 @@
 #define ECHO		"echo"
 #define PING		"ping"
 #define IP		"ip"
-#define STDBUF		"stdbuf"
 #define CAT		"cat"
 #define DHCLIENT	"dhclient"
 #define MKDIR		"mkdir"
-#define OVERWRITE	"echo y | cp"
-#define RM_FORCE	"rm -f"
-#define DOUBLE_AMPERSAND	"&&"
 
-#define INTERFACE_NAME	"eth0"
 #define MTU_VALUE	"65521"
 
 #define NO_CARD	-1
