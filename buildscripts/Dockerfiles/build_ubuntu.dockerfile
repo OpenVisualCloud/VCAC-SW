@@ -21,9 +21,10 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
 	libssl-dev \
 	lsb-release \
 	openssl \
+	pigz \
 	make \
 	sudo \
 	udev
 
-COPY build.sh /root
+COPY build.sh library_fs.sh /root/
 ENTRYPOINT ["/root/build.sh"]

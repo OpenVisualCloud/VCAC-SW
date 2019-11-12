@@ -11,12 +11,19 @@
 #
 # For reproducible results, there should be least amount of manual work.
 
+# shellcheck source=library_fs.sh
+source "$(cd "$(dirname "$(readlink -f "$0")")"; pwd)/"library_fs.sh
+
 usage(){
 echo -n 'Mandatory arguments:
 --in-from-qb <qbdir> : top directory containing all files needed for release,
 	(non-releasable files could be present,
 	ie: this could be our gksfiler mounted resource)
 --out-pkg <outname.zip> : name of resulting archive
+
+Optional arguments:
+--only-pattern <pattern>
+	prepare only configurations which match <pattern> (by grep -E) (see available configurations in '"$0"'::main())
 '
 }
 
@@ -33,11 +40,13 @@ trap 'die "(cmd: $BASH_COMMAND)"' ERR
 INPUT_DIR=
 OUT_PKG_NAME=
 OUTPUT_DIR=
+ONLY_PATTERN= # optional
 
 parse_parameters(){
 	while [ $# -gt 1 ]; do
 		case "${1}" in
 		--in-from-qb) INPUT_DIR="${2}";;
+		--only-pattern) ONLY_PATTERN="${2}";;
 		--out-pkg)
 			OUT_PKG_NAME="$(grep '.zip$' <<< "${2}")" \
 				|| die '--out-pkg <pkgname> must be zip archive'
@@ -61,18 +70,20 @@ main(){
 
 	copy_sources build_scripts
 	copy_sources vca_apps
-	copy_sources vca_modules
-	extract_vca_kernel_patches_for_centos 3.10.0-693
-	extract_vca_kernel_patches_for_ubuntu 4.14.20
-	extract_vca_kernel_patches_for_ubuntu 4.19.0
-	copy 'kernel-5.1.16*config' # workaround until there are files on QB, TODO: remove after closing VCASS-2824
-	copy 'kernel-5.1.16*patch'  # workaround until there are files on QB, TODO: remove after closing VCASS-2824
-	extract_windows_img_build_scripts
+	copy_sources vcass-modules
+	prepare_if_selected extract_vca_kernel_patches_for_centos 3.10.0-693
+	prepare_if_selected extract_vca_kernel_patches_for_centos 3.10.0-957 sgx
+	prepare_if_selected extract_vca_kernel_patches_for_ubuntu 4.14.20
+	prepare_if_selected extract_vca_kernel_patches_for_ubuntu 4.15.0	sgx
+	prepare_if_selected extract_vca_kernel_patches_for_ubuntu 4.19.0
+	prepare_if_selected copy_kernel_patch_and_config_for_centos 5.1.16
+	prepare_if_selected extract_windows_img_build_scripts
 
 	# extract files intended to use directly by customer during build
 	extract_and_copy README_master_build.txt 'build_scripts*.tar.gz'
 	mv "${OUTPUT_DIR}"/README{_master_build,}.txt
 	extract_and_copy build.sh 'build_scripts*.tar.gz'
+	extract_and_copy library_fs.sh 'build_scripts*.tar.gz'
 	extract_and_copy master_build.sh 'build_scripts*.tar.gz'
 	extract_and_copy download_dependencies.sh 'build_scripts*.tar.gz'
 	extract_and_copy Dockerfiles/build_centos.dockerfile 'build_scripts*.tar.gz'
@@ -88,20 +99,33 @@ main(){
 	}
 	mkdir -p "$(dirname "${OUT_PKG_NAME}")"
 	cd "${OUTPUT_DIR}"
-	find . -type f | sort | zip -q -@ "${OUT_PKG_NAME}"
+	# files added by excluded .patch are already in its place at appropriate moment
+	find . -type f | sort \
+		| grep -v 'Add-files-generated-by-fakeroot*debian-rules-clean.patch' \
+		| zip -q -@ "${OUT_PKG_NAME}"
 	cd
 	rm -rf "${OUTPUT_DIR}"
 }
 
-# find "${1}*" in ${INPUT_DIR} and copy it into ${OUTPUT_DIR}
-copy(){
-	local _FIND_PATT _IN_FILE _KERNEL_VERSION _OUT_DIR
-	_FIND_PATT="$1*"
-	_IN_FILE="$(find_one "${INPUT_DIR}" -type f -name "${_FIND_PATT}")"
-	_KERNEL_VERSION=5.1.16
-	_OUT_DIR="${OUTPUT_DIR}/centos_with_kernel_${_KERNEL_VERSION}"
+prepare_if_selected(){
+	if ! grep -qE "${ONLY_PATTERN}" <<< "$*"; then
+		echo "Configuration $* not selected by --only-pattern"
+		return
+	fi
+	"$@"
+}
+
+# find "*${_KERNEL_VERSION}/**/kernel.{config,patch}" in ${INPUT_DIR} and copy them into ${OUTPUT_DIR}
+copy_kernel_patch_and_config_for_centos(){
+	local _FIND_PATT _IN_FILE _KERNEL_VERSION _OUT_DIR _FILE_NAME
+	_KERNEL_VERSION="$1"
+	_OUT_DIR="${OUTPUT_DIR}/centos-with-kernel-${_KERNEL_VERSION}"
 	mkdir -p "${_OUT_DIR}"
-	cp -a "${_IN_FILE}" "${_OUT_DIR}"
+	for _FILE_NAME in kernel.config kernel.patch; do
+		_FIND_PATT="*centos*${_KERNEL_VERSION}*/${_FILE_NAME}"
+		_IN_FILE="$(find_single "${INPUT_DIR}" -type f -ipath "${_FIND_PATT}")"
+		cp -a "${_IN_FILE}" "${_OUT_DIR}"
+	done
 }
 
 # find $1*tar.gz and copy it into ${OUTPUT_DIR}
@@ -109,9 +133,8 @@ copy(){
 copy_sources(){
 	local _SOURCE_NAME _IN_FILE _PKG_VER _FIND_PATT
 	_SOURCE_NAME="$1"
-	_FIND_PATT="${_SOURCE_NAME}*tar.gz" # like vca_modules_4.4.155-1.2.6.265.vca_2.6.265_src.tar.gz
-	# grep with empty pattern has non-zero exit code on empty input
-	_IN_FILE="$(find "${INPUT_DIR}" -type f -name "${_FIND_PATT}" | head -1 | grep '')" \
+	_FIND_PATT="${_SOURCE_NAME}*tar.gz" # like vcass-modules_4.4.155-1.2.6.265.vca_2.6.265_src.tar.gz
+	_IN_FILE="$(find_any "${INPUT_DIR}" -type f -name "${_FIND_PATT}")" \
 		|| die "Could not find ${_FIND_PATT}"
 	echo "Using ${_IN_FILE} as ${_SOURCE_NAME} sources." >&2
 	# do not use whole _IN_FILE name, as it likely contains "some" kernel name (which will be confusing when used for other kernels)
@@ -129,7 +152,7 @@ extract_and_copy(){
 	_FIND_PATT="$2"
 	_OUT_DIR="${3-${OUTPUT_DIR}}"
 	_OUT_FILE="${_OUT_DIR}/${_FILE_PATH}"
-	_ARCHIVE="$(find_one "${INPUT_DIR}" -type f -name "${_FIND_PATT}")"
+	_ARCHIVE="$(find_single "${INPUT_DIR}" -type f -name "${_FIND_PATT}")"
 	mkdir -p "$(dirname "${_OUT_FILE}")"
 	tar --to-stdout --wildcards -xzf "${_ARCHIVE}" "*/${_FILE_PATH}" > "${_OUT_FILE}"
 }
@@ -139,7 +162,7 @@ extract_windows_img_build_scripts(){
 (
 	local _TMP_DIR _IN_ARCHIVE _FIND_PATT
 	_FIND_PATT='build_scripts*.tar.gz'
-	_IN_ARCHIVE="$(find_one "${INPUT_DIR}" -type f -name "${_FIND_PATT}")"
+	_IN_ARCHIVE="$(find_single "${INPUT_DIR}" -type f -name "${_FIND_PATT}")"
 	_TMP_DIR="$(mktemp -d -p "${OUTPUT_DIR}")" # use ${OUTPUT_DIR} as parent to have free cleanup on failure
 	cd "${_TMP_DIR}"
 	# extract necessary sources to ${_TMP_DIR}; ignore two top levels in build_scripts
@@ -155,9 +178,9 @@ extract_windows_img_build_scripts(){
 extract_vca_kernel_patches_for_ubuntu(){
 	local _KERNEL_VERSION _KERNEL_PATCHES_ARCHIVE _OUT_KERNEL_DIR
 	_KERNEL_VERSION="$1"
-	_OUT_KERNEL_DIR="${OUTPUT_DIR}/ubuntu_with_kernel_${_KERNEL_VERSION}"
+	_OUT_KERNEL_DIR="${OUTPUT_DIR}/ubuntu-with-kernel-${_KERNEL_VERSION}"
 	mkdir -p "${_OUT_KERNEL_DIR}"
-	_KERNEL_PATCHES_ARCHIVE="$(find_one "${INPUT_DIR}" -name "vca_patches_kernel_${_KERNEL_VERSION}*_src.tar.gz" -type f)"
+	_KERNEL_PATCHES_ARCHIVE="$(find_single "${INPUT_DIR}" -name "vca_patches_kernel_${_KERNEL_VERSION}*_src.tar.gz" -type f)"
 	tar -f "${_KERNEL_PATCHES_ARCHIVE}" -C "${_OUT_KERNEL_DIR}" -xz
 }
 
@@ -167,10 +190,10 @@ extract_vca_kernel_patches_for_centos(){
 	local _KERNEL_VERSION _FIND_PATT _KERNEL_SRC_RPM _OUT_DIR _OUT_PATCH_FILE _OUT_CONF_FILE
 	_KERNEL_VERSION="$1"
 	_FIND_PATT="kernel-${_KERNEL_VERSION}*VCA.src.rpm"
-	_KERNEL_SRC_RPM="$(find_one "${INPUT_DIR}" -name "${_FIND_PATT}" -type f)"
-	_OUT_DIR="${OUTPUT_DIR}/centos_with_kernel_${_KERNEL_VERSION}"
-	_OUT_CONF_FILE="${_OUT_DIR}/kernel-${_KERNEL_VERSION}-vca.config"
-	_OUT_PATCH_FILE="${_OUT_DIR}/$(basename "${_KERNEL_SRC_RPM}" '.src.rpm').patch"
+	_KERNEL_SRC_RPM="$(find_single "${INPUT_DIR}" -name "${_FIND_PATT}" -type f)"
+	_OUT_DIR="${OUTPUT_DIR}/centos-with-kernel-${_KERNEL_VERSION}"
+	_OUT_CONF_FILE="${_OUT_DIR}/kernel.config"
+	_OUT_PATCH_FILE="${_OUT_DIR}/kernel.patch"
 	mkdir -p "${_OUT_DIR}"
 	extract_file_from_rpm 'vca_patches.patch' "${_KERNEL_SRC_RPM}" | split_dot_config_out "${_OUT_CONF_FILE}" > "${_OUT_PATCH_FILE}"
 }
@@ -181,17 +204,6 @@ extract_file_from_rpm(){
 	_FILE="$1"
 	_RPM="$2"
 	rpm2cpio "${_RPM}" | cpio -i --quiet --to-stdout "${_FILE}"
-}
-
-# same as find, but ensure that there is exactly one output line (file or dir)
-find_one(){
-	find "$@" \
-	| awk '
-	$0 != "" { ++lines; print }
-	END { if (lines != 1) {
-		print lines+0, "matches found, but exactly 1 is required\n(was looking for: find '"$*"')" > "/dev/stderr"
-		exit 2
-	}}'
 }
 
 # split stdin that .config resulting after patches application will be saved in $1

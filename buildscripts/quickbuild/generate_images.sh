@@ -282,7 +282,6 @@ function gen_ubuntu {
 		;;
 	esac
 	if [ "${CSTATE}" == OFF ]; then
-		_ARCHIVES="${_ARCHIVES}"
 		_GRUB_CFG="${_GRUB_CFG:0:-4}_cstate_off.cfg"
 		_CSTATE_NAME="_cstate_off"
 	fi

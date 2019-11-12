@@ -14,12 +14,16 @@ This repository contains:
 
 ## EEPROM and VCAgent files
 Please refer to User Guide for more information and usage suggestions.
+
 VCAC-R, normal EEPROM:
 https://openvisualcloud.github.io/VCAC-SW/eeprom/VCAC-R
+
 VCAC-R, DMA-disabled EEPROM:
 https://openvisualcloud.github.io/VCAC-SW/eeprom/VCAC-R/DMA_disabled
+
 VCAC-A, normal EEPROM:
 https://openvisualcloud.github.io/VCAC-SW/eeprom/VCAC-A
+
 VCA Agent:
 https://openvisualcloud.github.io/VCAC-SW/windows/vcagent
 

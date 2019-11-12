@@ -78,7 +78,7 @@ function generate_modules_ubuntu {
 	local KERNEL_SRC; KERNEL_SRC="$( ls -d "${KERNEL_DEVEL}"/usr/src/* )"
 
 	# generate tar.gz with full source
-	local _SRC_ARCHIVE_NAME=vca_modules_"${KER_VER}_${PKG_VER}"_src.tar.gz
+	local _SRC_ARCHIVE_NAME=vcass-modules_"${KER_VER}_${PKG_VER}".tar.gz
 	tar --exclude './.*' -zcf "${OUT_DIR}/${_SRC_ARCHIVE_NAME}" . || die 'Could not make source archive ${OUT_DIR}/${_SRC_ARCHIVE_NAME}'
 
 	# actual build

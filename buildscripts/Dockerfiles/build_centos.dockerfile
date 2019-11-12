@@ -10,11 +10,16 @@ RUN yum -y install \
 	binutils-devel \
 	bison \
 	cmake \
+	createrepo \
 	elfutils-devel \
+	epel-release \
 	gcc-c++ \
 	gettext \
 	hmaccalc \
 	java-devel \
+	kbd \
+	keyutils \
+	livecd-tools \
 	m4 \
 	make \
 	ncurses-devel \
@@ -29,9 +34,15 @@ RUN yum -y install \
 	python-devel \
 	python-docutils \
 	rpm-build \
+	sudo \
+	wget \
 	which \
 	xmlto \
 	zlib-devel
 
-COPY build.sh /root
+# install packages requiring epel-release
+RUN yum -y install \
+	fakeroot
+
+COPY build.sh library_fs.sh /root/
 ENTRYPOINT ["/root/build.sh"]

@@ -43,7 +43,7 @@ function gen_apps {
 	# generate tar.gz with full source
 	local _SRC_ARCHIVE_PATH _CMAKE_DEFS
 	_SRC_ARCHIVE_PATH="${WORKSPACE}/vca_apps_${PKG_VER}_src.tar.gz"
-	tar --exclude './.*' -zcf "${_SRC_ARCHIVE_PATH}" . || die 'Could not make source archive'
+	tar --exclude './.*' --exclude "${_SRC_ARCHIVE_PATH}" -zcf "${_SRC_ARCHIVE_PATH}" . || die 'Could not make source archive'
 
 	# build requested out of source-tree by the use of -H, -B options:
 	_CMAKE_DEFS=("-DOS=${OS}" "-DPKG_VER=${PKG_VER}" "-DDESTDIR=" "-DSGX=${SGX}")

@@ -10,15 +10,20 @@ set -Eeuo pipefail
 VCA_IN_DIR=
 DOWNLOAD_DIR=
 OUT_DIR=
-ONLY_PATTERN= # optional
+ONLY_PATTERN=vcac-r # optional
+
+# other globals
+BUILDSCRIPTS_DIR=
 
 ## selection of binaries to build, comment out unwanted ones (by using '#')
 main(){
 	build centos 7.4.1708 host 3.10.0-693
+	build centos 7.6.1810 host 3.10.0-957 vcac-r
+	build centos 7.6.1810 host+image 3.10.0-957 sgx
 	build centos 7.6.1810 host 5.1.16
 	build ubuntu 16.04 host 4.14.20
-	build ubuntu 18.04 host 4.19.0
-	build ubuntu 18.04 image 4.19.0
+	build ubuntu 18.04 host 4.19.0 vcac-r
+	build ubuntu 18.04 host+image 4.15.0 sgx
 	print_summary
 }
 
@@ -49,7 +54,7 @@ check_prerequisites(){
 	command -v docker >/dev/null || die 'docker must be installed prior to building VCA software binaries, minimal required version is 17.05'
 	docker --version | cut -f3 -d' ' | awk -F. '$1 < 17 || ($1 == 17 && $2 < 5) { exit 17 }' \
 		|| die "$(docker --version) is too old, minimal required version is 17.05"
-	docker run hello-world >/dev/null || die 'docker is unable to start any container, perhaps it is not configured correctly
+	docker run --rm hello-world >/dev/null || die 'docker is unable to start any container, perhaps it is not configured correctly
 	for HTTP proxy configuration see: https://docs.docker.com/config/daemon/systemd/
 	for granting permission to docker deamon see: https://docs.docker.com/install/linux/linux-postinstall/'
 }
@@ -70,8 +75,15 @@ parse_parameters(){
 		usage
 		exit 1
 	fi
-	ensure_that_there_is_at_least_one_file_within_dir "${VCA_IN_DIR}"
-	ensure_that_there_is_at_least_one_file_within_dir "${DOWNLOAD_DIR}" || die "Run\n\t${VCA_IN_DIR}/download_dependencies.sh '${DOWNLOAD_DIR}'\nto download missing files."
+	if is_release_pkg_in_use; then
+		BUILDSCRIPTS_DIR="${VCA_IN_DIR}"
+	else
+		BUILDSCRIPTS_DIR="${VCA_IN_DIR}"/buildscripts
+	fi
+	# shellcheck source=library_fs.sh
+	source "${BUILDSCRIPTS_DIR}/library_fs.sh"
+	find_any "${DOWNLOAD_DIR}/" >/dev/null \
+		|| die "Run\n\t${BUILDSCRIPTS_DIR}/download_dependencies.sh '${DOWNLOAD_DIR}'\nto download missing files into ${DOWNLOAD_DIR} directory."
 	mkdir -p "${OUT_DIR}"
 }
 
@@ -81,7 +93,7 @@ parse_parameters(){
 build(){
 	local DISTRO BASE_IMG_VER COMPONENT COMPONENT_PARAM
 	local DOCKER_BUILD_ARGS DOCKER_RUN_ARGS DOCKERFILE_NAME
-	local KNAME KNAME_PREFIX DOCKER_CONTEXT_DIR BUILDSCRIPTS_DIR
+	local KNAME KNAME_PREFIX DOCKER_CONTEXT_DIR
 	DISTRO="$1"
 	BASE_IMG_VER="$2"
 	COMPONENT="$3"
@@ -89,11 +101,6 @@ build(){
 	if ! grep -qE "${ONLY_PATTERN}" <<< "$@"; then
 		echo "Configuration $* not selected by --only-pattern"
 		return
-	fi
-	if is_release_pkg_in_use; then
-		BUILDSCRIPTS_DIR="${VCA_IN_DIR}"
-	else
-		BUILDSCRIPTS_DIR="${VCA_IN_DIR}"/buildscripts
 	fi
 	DOCKERFILE_NAME="${BUILDSCRIPTS_DIR}/Dockerfiles/build_${DISTRO}.dockerfile"
 	case "${DISTRO}" in
@@ -103,12 +110,9 @@ build(){
 	esac
 	KNAME="${KNAME_PREFIX}${COMPONENT_PARAM}"
 	[[ "${COMPONENT_PARAM}" =~ ^[0-9.-]+$ ]] || die "unsupported kernel version specification format: '${COMPONENT_PARAM}'"
-	case "${COMPONENT}" in
-		host) ;;
-		image) DOCKER_RUN_ARGS+=(--privileged -v /dev:/dev) # taken from: (long discussion) https://github.com/moby/moby/issues/27886#issuecomment-281280504
-		;;
-		*) die "unsupported component: '${COMPONENT}'" ;;
-	esac
+	if [[ "${COMPONENT}" =~ image ]]; then
+		DOCKER_RUN_ARGS+=(--privileged -v /dev:/dev) # taken from: (long discussion) https://github.com/moby/moby/issues/27886#issuecomment-281280504
+	fi
 	DOCKER_BUILD_ARGS+=($(concat_docker_arg build-arg BASE_IMG_VER))
 	DOCKER_BUILD_ARGS+=($(concat_docker_arg build-arg http_proxy))
 	DOCKER_BUILD_ARGS+=($(concat_docker_arg build-arg https_proxy))
@@ -121,7 +125,7 @@ build(){
 
 	# build docker image
 	DOCKER_CONTEXT_DIR="$(mktemp -d)"
-	cp "${BUILDSCRIPTS_DIR}"/build.sh "${DOCKER_CONTEXT_DIR}"/build.sh
+	cp "${BUILDSCRIPTS_DIR}"/build.sh "${BUILDSCRIPTS_DIR}"/library_fs.sh "${DOCKER_CONTEXT_DIR}"
 	cp "${DOCKERFILE_NAME}" "${DOCKER_CONTEXT_DIR}"/Dockerfile
 	chmod +x "${DOCKER_CONTEXT_DIR}"/build.sh
 	docker build --tag="${KNAME}" "${DOCKER_BUILD_ARGS[@]}" "${DOCKER_CONTEXT_DIR}"
@@ -148,20 +152,7 @@ build(){
 # detect if script was invoked from extracted release package
 # (other supported working mode is from source (like git repo))
 is_release_pkg_in_use(){
-	find_one "${VCA_IN_DIR}" -type f -name 'vca_apps*' &>/dev/null
-}
-
-ensure_that_there_is_at_least_one_file_within_dir(){
-	local _DIR; _DIR="$1"
-	[ -d "${_DIR}" ] || die "${_DIR} is not a directory, but was provided as input directory for $0"
-	(
-		set +o pipefail # ignore writing to closed pipe error, common for 'find | head -1'
-		# empty grep pattern fails only for empty input, head is to avoid listing really big tree structures
-		find "${_DIR}" -type f | head -1 | grep -q '' || {
-			echo "${_DIR} does not contain any files, but was provided as input directory for $0" >&2
-			return 3
-		}
-	)
+	[ -f "${VCA_IN_DIR}"/vca_apps* ] &>/dev/null
 }
 
 # make --env or --build-arg for docker run/build
@@ -180,9 +171,9 @@ print_summary(){
 	echo "
 
 To list all build binaries invoke:
-	find '${OUT_DIR}' -type f | sort
+	find '${OUT_DIR}/' -type f | sort
 To list only most often needed files invoke:
-	find '${OUT_DIR}' -type f | sort | grep -v -e devel -e headers -e perf -e tools -e debug -e libc -e src -e dbg
+	find '${OUT_DIR}/' -type f | sort | grep -v -e devel -e headers -e perf -e tools -e debug -e libc -e src -e dbg
 "
 }
 

@@ -68,6 +68,8 @@ namespace vca
 		{{0x393b7801, 0}, "VCAC-R 1.2"},
 		{{0x4bb11a52, 0}, "VCAC-R 1.3"},
 		{{0x3c5edc5e, 0}, "VCAC-R 1.4 (DMA disabled on nodes)" },
+		{{0x0bac71ee, 0}, "VCAC-R 1.5.0 (DMA disabled on nodes)"},
+		{{0x603abe83, 0}, "VCAC-R 1.5.1 (DMA disabled on nodes)"},
 	};
 
 	const size_t num_known_eeproms =

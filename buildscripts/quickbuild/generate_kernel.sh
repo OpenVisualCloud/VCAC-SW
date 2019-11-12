@@ -21,6 +21,8 @@
 
 set -euEo pipefail
 
+trap 'die "(cmd: $BASH_COMMAND)"' ERR
+
 function print_usage {
 	set +x
 	echo "Synopsis:
@@ -350,7 +352,7 @@ case "${OS}" in
 				generate_centos_from_repo_and_src_rpm kernel-3.10.0-693.17.1.el7.src.rpm "${PKG_VER}.VCA"
 			;;
 			3.10.0-957)
-				generate_centos_from_repo_and_src_rpm kernel-3.10.0-957.el7.src.rpm "${PKG_VER}.VCA"
+				generate_centos_from_repo_and_src_rpm kernel-3.10.0-957.12.2.el7.src.rpm "${PKG_VER}.VCA"
 			;;
 			3.10.107)
 				generate_k3_centos_from_repo
