@@ -387,10 +387,10 @@ static u32 _plx_get_cpu_num(struct vca_csm_device *cdev)
 	return plx_get_cpu_num(xdev);
 }
 
-static u32 _plx_get_memsize(struct vca_csm_device *cdev)
+static u32 _plx_get_meminfo(struct vca_csm_device *cdev)
 {
 	struct plx_device *xdev = vca_csmdev_to_xdev(cdev);
-	return plx_get_memsize(xdev);
+	return plx_get_meminfo(xdev);
 }
 
 static enum vca_lbp_retval _plx_lbp_get_mac_addr(struct vca_csm_device *cdev,
@@ -530,7 +530,7 @@ static enum vca_lbp_retval _plx_csm_agent_command(
 	if (boot_params->csa_finished) {
 		*size = plx_read_dma_mapped_mem(xdev,
 			&boot_params->card_csa_mem_dma_addr,
-			&boot_params->card_csa_mem_size, buf, *size);
+			&boot_params->card_csa_mem_info, buf, *size);
 		boot_params->csa_finished = 0;
 		rc = LBP_STATE_OK;
 	}
@@ -560,7 +560,7 @@ struct vca_csm_hw_ops vca_csm_plx_hw_ops = {
 	.link_status = _plx_link_status,
 	.get_card_type = _plx_get_card_type,
 	.get_cpu_num = _plx_get_cpu_num,
-	.get_memsize = _plx_get_memsize,
+	.get_meminfo = _plx_get_meminfo,
 	.lbp_boot_ramdisk = _plx_lbp_boot_ramdisk,
 	.lbp_boot_blkdisk = _plx_lbp_boot_blkdisk,
 	.lbp_boot_via_pxe = _plx_lbp_boot_via_pxe,

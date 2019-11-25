@@ -62,7 +62,7 @@ static ssize_t _plx_set_card_csa_mem(struct vca_csa_device *rdev,
 	struct vca_bootparam * boot_params = xdev->rdp;
 	ssize_t cnt = plx_set_config_file(xdev, buf, count,
 		&boot_params->card_csa_mem_dma_addr,
-		&boot_params->card_csa_mem_size,
+		&boot_params->card_csa_mem_info,
 		&rdev->card_csa_mem_va);
 	iowrite8(1, &boot_params->csa_finished);
 	return cnt;

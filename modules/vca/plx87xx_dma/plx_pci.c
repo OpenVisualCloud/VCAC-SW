@@ -45,11 +45,12 @@ plx_dma_hang_show(struct device *dev, struct device_attribute *attr,
 		 char *buf)
 {
 	struct plx_dma_device *plx_dma_dev = dev_get_drvdata(dev);
-
 	if (!plx_dma_dev)
 		return -EINVAL;
-
-	return snprintf(buf, PAGE_SIZE, "%d", plx_dma_dev->plx_chan.dma_hang);
+	if (plx_get_dma_hang(&(plx_dma_dev->plx_chan))) {
+		return snprintf(buf, PAGE_SIZE, "1");
+	}
+	return snprintf(buf, PAGE_SIZE, "0");
 }
 
 static ssize_t
@@ -63,15 +64,58 @@ plx_dma_hang_write(struct device *dev, struct device_attribute *attr,
 		return -EINVAL;
 
 	ch = &plx_dma_dev->plx_chan;
-
+	spin_lock(&ch->prep_lock);
 	if (buf[0] == '0')
-		ch->dma_hang = false;
+		ch->dma_hang_mode &= ~DMA_MODE_HANG;
 	else if (buf[0] == '1')
-		ch->dma_hang = true;
+		ch->dma_hang_mode |= DMA_MODE_HANG;
+	spin_unlock(&ch->prep_lock);
 	return count;
 }
 static DEVICE_ATTR(plx_dma_hang, PERMISSION_READ,
 		   plx_dma_hang_show, plx_dma_hang_write);
+
+
+static ssize_t
+plx_dma_mode_force_fail_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct plx_dma_device *plx_dma_dev = dev_get_drvdata(dev);
+	if (!plx_dma_dev)
+		return -EINVAL;
+	return snprintf(buf,PAGE_SIZE,"%s;dma_hang: %s;fault_injection: %s",
+		plx_get_dma_hang(&(plx_dma_dev->plx_chan))?            "1 fail force": "0 hw",
+		plx_get_dma_mode_force_fail(&(plx_dma_dev->plx_chan))? "True": "False",
+		plx_get_dma_fault_injection(&(plx_dma_dev->plx_chan))? "True": "False");
+}
+
+
+static ssize_t
+plx_dma_mode_force_fail_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct plx_dma_device *plx_dma_dev = dev_get_drvdata(dev);
+	struct plx_dma_chan *ch;
+
+	if (!plx_dma_dev)
+		return -EINVAL;
+
+	ch = &plx_dma_dev->plx_chan;
+
+	if (buf[0] == '0') {
+		plx_set_dma_mode(ch, DMA_MODE_FORCE_FAIL, 0);
+	} else if (buf[0] == '1') {
+		plx_set_dma_mode(ch, DMA_MODE_FORCE_FAIL, DMA_MODE_FORCE_FAIL);
+	} else {
+		dev_err(dev, "%s Invalid write: %s count %li. Possible values '0' - hw, '1' - fail force",
+				__func__, buf, count);
+	}
+
+	return count;
+}
+
+static DEVICE_ATTR(plx_dma_mode_force_fail, PERMISSION_WRITE_READ,
+		   plx_dma_mode_force_fail_show, plx_dma_mode_force_fail_store);
 
 static struct plx_dma_device *
 plx_alloc_dma(struct pci_dev *pdev, void __iomem *iobase)
@@ -125,6 +169,13 @@ plxv_pci_probe(struct pci_dev *pdev, const struct pci_device_id *pdev_id)
 	if (rc) {
 		dev_err(&pdev->dev,
 			"failed to create dma_hand file, rc: %d\n", rc);
+		goto free_device;
+	}
+
+	rc = device_create_file(&pdev->dev, &dev_attr_plx_dma_mode_force_fail);
+	if (rc) {
+		dev_err(&pdev->dev,
+			"failed to create plx_dma_mode_force_fail file, rc: %d\n", rc);
 		goto free_device;
 	}
 

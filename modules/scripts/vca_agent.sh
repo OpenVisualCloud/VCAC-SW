@@ -19,8 +19,7 @@
 # Intel VCA Scripts.
 #
 
-export PATH=$PATH:/sbin
-export PATH=$PATH:/bin
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 
 FINISH=false
 
@@ -167,6 +166,9 @@ listener()
 			cpu_uuid)
 				dmidecode | grep -i uuid | awk '{print $2}' > /sys/class/vca/vca/csa_mem
 				;;
+			memory_info)
+				dmidecode -t memory | grep 'Serial Number' > /sys/class/vca/vca/csa_mem
+				;;
 			node_stats)
 				MEM_USAGE=$(awk ' 
 					/^MemTotal:/ { mem_total=$2 }
@@ -235,6 +237,17 @@ listener()
 				echo "OS Reboot requested by user" > /sys/class/vca/vca/csa_mem
 				reboot
 				;;
+                        mode_dma)
+                                echo "Old DMA force memory: $(cat /sys/class/vca/vca/device/dma_device/plx_dma_force_memcpy)" > /sys/class/vca/vca/csa_mem || :
+                                echo 0 >/sys/class/vca/vca/device/dma_device/plx_dma_force_memcpy || :
+                                ;;
+                        mode_memcpy)
+                                echo "Old DMA force memory: $(cat /sys/class/vca/vca/device/dma_device/plx_dma_force_memcpy)" > /sys/class/vca/vca/csa_mem || :
+                                echo 1 >/sys/class/vca/vca/device/dma_device/plx_dma_force_memcpy || :
+                                ;;
+                        dma_info)
+                                ( cd /sys/class/vca/vca/device/dma_device/ && grep -H '' plx_dma_mode_force_fail uevent || echo 'DMA is absent') > /sys/class/vca/vca/csa_mem || :
+                                ;;
 		esac
 		state_manager $INTERFACE
 		check_dhclient

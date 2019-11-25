@@ -30,6 +30,7 @@
 #include "plx_device.h"
 #include "plx_hw.h"
 #include "plx_lbp.h"
+#include <linux/module.h>
 
 #define VIRTUAL_DBG_SW_REG 0xA30
 #define MARGIN_TIME          8
@@ -44,11 +45,22 @@
 #define PV_ROOTPORT		0xc
 #define PV_DMABUS		0x10
 
+
+static bool kvm= false;
+module_param( kvm, bool, S_IRUGO|S_IWUSR);
+MODULE_PARM_DESC( kvm, "Extension to get physical a bus number of passtrough PCI device");
+
+static bool DontCheckEepromCrc = false;
+module_param(DontCheckEepromCrc, bool, 0644);
+MODULE_PARM_DESC(DontCheckEepromCrc, "Skip crc check for EEPROM");
+
+
 bool kvm_check_guest(void)
 {
 	unsigned int eax, ebx, ecx, edx;
 	char s[12];
 	unsigned int *i;
+	if( !kvm) return 0;
 
 	/* KVM_CPUID_SIGNATURE */
 	eax = 0x40000000;
@@ -574,6 +586,11 @@ int plx_check_eeprom(struct plx_device *xdev)
 {
 	u32 val;
 	u32 crc;
+
+	if (DontCheckEepromCrc) {
+		dev_info(&xdev->pdev->dev, "EEPROM CRC check skipped.\n");
+		return 0;
+	}
 
 	val = plx_mmio_read(&xdev->mmio, PLX_EEP_STATUS_CONTROL);
 
@@ -1157,7 +1174,7 @@ u32 plx_get_cpu_num(struct plx_device *xdev)
 	return nums;
 }
 
-u32 plx_get_memsize(struct plx_device *xdev)
+u32 plx_get_meminfo(struct plx_device *xdev)
 {
 	return xdev->lbp.i7_ddr_size_mb;
 }
@@ -1268,7 +1285,7 @@ void plx_init_vca_g2_gpios(struct plx_device *xdev)
 	case VCA_VCGA_FAB1:
 		if( data.Vcga.CpuReset0 || data.Vcga.CpuReset1)
 			break;
-	case VCA_UNKNOWN: case VCA_VV: case VCA_PRODUCTION: case VCA_POC: // These values should be removed from vca_card_type
+	case VCA_UNKNOWN: case VCA_VV: case VCA_PRODUCTION: // These values should be removed from vca_card_type
 	case VCA_VV_FAB1: case VCA_VV_FAB2: case VCA_FPGA_FAB1:
 		data.all= 0x7ff;
 		plx_mmio_write( &xdev->mmio, data.all, PLX_GPIO_OUTPUT);
@@ -1469,7 +1486,7 @@ void plx_turn_rcv_mode(struct plx_device *xdev, u32 cpu_id, bool turn_on)
 			_set_bit(xdev, plx_bios_rcv_bits[cpu_id], PLX_GPIO_OUTPUT);
 		else
 			 _clear_bit(xdev, plx_bios_rcv_bits[cpu_id], PLX_GPIO_OUTPUT);
-	} else if (!(xdev->card_type & VCA_VCGA)) {
+	} else if (xdev->card_type & VCA_VCGA) {
 		if (turn_on)
 			_clear_bit(xdev, plx_bios_rcv_bits_vcga[cpu_id], PLX_GPIO_OUTPUT);
 		else

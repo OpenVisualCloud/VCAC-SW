@@ -1,7 +1,7 @@
 /*
  * Intel VCA Software Stack (VCASS)
  *
- * Copyright(c) 2015-2017 Intel Corporation.
+ * Copyright(c) 2015-2019 Intel Corporation.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2, as
@@ -18,8 +18,6 @@
  * Intel VCA User Space Tools.
  */
 
-#define _GNU_SOURCE
-
 #include "helper_funcs.h"
 #include <dirent.h>
 #include <sys/poll.h>
@@ -30,15 +28,17 @@
 #include "vca_config_parser.h"
 #include "vca_defs.h"
 #include "vcassd_virtio_backend.h"
-#include "vcassd.h"
 #include "vcactrl.h"
 
-#include <stdint.h>
-#include <vca_ioctl.h>
-#include <vca_dev_common.h>
+/* forward declarations */
+static void *scan_for_devices(void *);
+static struct vca_info *vca_get_device_by_name(const char *name);
+static bool parse_fifo_msg(char *buf, char *remainder, bool ignore);
+static bool load_config();
+static void try_auto_boot(struct vca_info *vca);
 
 #define MAX_COMMAND_SIZE PATH_MAX * 2
-
+#define LOGFILE_NAME	"/var/log/vca/vcactld.log"
 FILE *logfp;
 struct vca_config *config = NULL;
 /* to protect config which can be reloaded anytime */
@@ -58,8 +58,6 @@ int terminate_msg_fifo_fd = FAIL;
 int terminate_reboot_fd = FAIL;
 volatile sig_atomic_t terminating = false;
 
-/* signals handling */
-#if VCACTLD_SIGNAL_HANDLERS_FUNCTIONS
 static void handle_SIGTERM(int signum)
 {
 	vcasslog("Caught signal SIGTERM %d\n", signum);
@@ -82,9 +80,7 @@ static void handle_SIGUSR2(int signum)
 		vcasslog("Could not create scanning for devices thread %s\n",
 			strerror(err));
 }
-#endif // VCACTLD_SIGNAL_HANDLERS_FUNCTIONS
 
-#if VCACTLD_THREAD_MANAGE_FUNCTIONS
 void try_cancel_vca_thread(struct thread_info * ti, const char *vca_name)
 {
 	if (ti->is_active)
@@ -124,16 +120,12 @@ void try_create_vca_thread(struct thread_info * ti,
 		ti->is_reseting = false;
 	}
 }
-#endif // VCACTLD_THREAD_MANAGE_FUNCTIONS
 
-#if VCACTLD_THREAD_FUNCTIONS
 static void *init_vca(void *arg)
 {
 	struct vca_info *vca = (struct vca_info *)arg;
-	struct sigaction ignore = {
-		.sa_flags = 0,
-		.sa_handler = SIG_IGN
-	};
+	struct sigaction ignore = { 0 };
+	ignore.sa_handler = SIG_IGN;
 
 	/* if auto booting is enabled, then boot this vca cpu node */
 	try_auto_boot(vca);
@@ -180,8 +172,7 @@ finish:
 	return NULL;
 }
 
-
-static void *reboot_mgr()
+static void *reboot_mgr(void *)
 {
 	struct pollfd pfd[2];
 	pfd[0].events = POLLIN;
@@ -224,8 +215,7 @@ static void *reboot_mgr()
 	return NULL;
 }
 
-
-static void *fifo_mgr()
+static void *fifo_mgr(void *)
 {
 	char buf[PIPE_BUF];
 	char *remainder = (char*)malloc(MAX_COMMAND_SIZE);
@@ -278,8 +268,7 @@ static void *fifo_mgr()
 	return NULL;
 }
 
-
-static void *reload_config()
+static void *reload_config(void *)
 {
 	struct vca_info *vca;
 	int err;
@@ -364,7 +353,7 @@ forced_finish:
 	return NULL;
 }
 
-static void *scan_for_devices()
+static void *scan_for_devices(void * = nullptr)
 {
 	struct vca_info *vca;
 	struct dirent *file;
@@ -388,7 +377,7 @@ static void *scan_for_devices()
 			vca_get_device_by_name(file->d_name))
 			continue;
 
-		vca = calloc(1, sizeof(struct vca_info));
+		vca = (vca_info *) calloc(1, sizeof(struct vca_info));
 		if (!vca) {
 			vcasslog("Could not allocate memory for %s\n",
 				file->d_name);
@@ -407,7 +396,7 @@ static void *scan_for_devices()
 		vca->vca_reboot.reboot_ti.name = "reboot";
 		vca->init_ti.name = "init_vca";
 		str_len = strlen(file->d_name) + 1;
-		vca->name = malloc(str_len);
+		vca->name = (char *) malloc(str_len);
 		if (vca->name) {
 			STRCPY_S(vca->name, file->d_name, str_len);
 			vcasslog("VCA name %s card id cpu id %d %d\n",
@@ -466,9 +455,7 @@ static void terminate()
 	}
 	vcasslog("Terminated gracefully!\n");
 }
-#endif // VCACTLD_THREAD_FUNCTIONS
 
-#if VCACTLD_HELPER_FUNCTIONS
 void common_log(const char *format, ...) {
 	va_list args;
 	char buffer[PAGE_SIZE];
@@ -721,8 +708,6 @@ static void try_auto_boot(struct vca_info *vca)
 	}
 }
 
-#endif // VCACTLD_HELPER_FUNCTIONS
-
 int main(int argc, char *argv[])
 {
 	int rc;
@@ -818,9 +803,4 @@ int main(int argc, char *argv[])
 		fclose(logfp);
 	close(lock_file_fd);
 	return EXIT_SUCCESS;
-}
-
-// Work a round. Remove it after refactor vca_config
-enum vca_card_type get_card_type(int card_id) {
-	return VCA_UNKNOWN;
 }

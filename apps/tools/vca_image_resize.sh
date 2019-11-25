@@ -1,4 +1,4 @@
-#!/bin/bash -eu
+#!/bin/bash
 #
 # Intel VCA Software Stack (VCASS)
 #
@@ -18,6 +18,8 @@
 #
 # Intel VCA Scripts.
 #
+
+set -eu
 
 # on CentOS requires: gdisk, coreutils (truncate, dd,tail, head, cut, cat, ls), findutils (find), e2fsprogs-1.42.9-9.el7.x86_64 (resize2fs, filefrag, dumpe2fs/tune2fs ), kpartx (kpartx), gawk (awk), util-linux (losetup)
 # on Ubuntu requires: gdisk, coreutils (truncate, dd,tail, head, cut, cat, ls), findutils (find), e2fsprogs (resize2fs, filefrag, dumpe2fs/tune2fs ), kpartx (kpartx), gawk (awk), mount (losetup)

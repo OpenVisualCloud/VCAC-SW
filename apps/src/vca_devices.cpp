@@ -1,4 +1,7 @@
 #include "vca_devices.h"
+#include "vca_mgr_ioctl.h"
+#include "vca_mgr_extd_ioctl.h"
+#include "vca_csm_ioctl.h"
 
 unsigned get_cards_num() {
 	unsigned cnt = 0;
@@ -9,7 +12,65 @@ unsigned get_cards_num() {
 }
 
 bool card_exists(int card_id) {
-	return character_device_exists((VCA_MGR_DEV_PATH + int_to_string(card_id)).c_str());
+    struct stat i;
+    std::string const path=VCA_MGR_DEV_PATH + int_to_string(card_id);
+    if( stat( path.c_str(), &i) == 0)
+        return S_ISCHR( i.st_mode);
+    return false;
+}
+
+bool vca_ioctl(filehandle_t fd, unsigned long ioctl_cmd, void *arg) {
+	int rc = ioctl(fd, ioctl_cmd, arg);
+	if (rc != SUCCESS) {
+		LOG_ERROR("%s failed: %s!\n", get_vca_ioctl_name(ioctl_cmd), strerror(errno));
+		return false;
+	}
+	return true;
+}
+
+const char *get_vca_ioctl_name(unsigned long ioctl_cmd) {
+	switch(ioctl_cmd) {
+	case VCA_READ_CARD_TYPE:
+		return "VCA_READ_CARD_TYPE";
+	case VCA_READ_CPU_NUM:
+		return "VCA_READ_CPU_NUM";
+	case VCA_RESET:
+		return "VCA_RESET";
+	case VCA_POWER_BUTTON:
+		return "VCA_POWER_BUTTON";
+	case VCA_SET_SMB_ID:
+		return "VCA_SET_SMB_ID";
+	case VCA_UPDATE_EEPROM:
+		return "VCA_UPDATE_EEPROM";
+	case VCA_UPDATE_SECONDARY_EEPROM:
+		return "VCA_UPDATE_SECONDARY_EEPROM";
+	case VCA_READ_MODULES_BUILD:
+		return "VCA_READ_MODULES_BUILD";
+	case VCA_READ_BOARD_ID:
+		return "VCA_READ_BOARD_ID";
+	case VCA_READ_EEPROM_CRC:
+		return "VCA_READ_EEPROM_CRC";
+	case VCA_ENABLE_GOLD_BIOS:
+		return "VCA_ENABLE_GOLD_BIOS";
+	case VCA_DISABLE_GOLD_BIOS:
+		return "VCA_DISABLE_GOLD_BIOS";
+	case VCA_CHECK_POWER_BUTTON:
+		return "VCA_CHECK_POWER_BUTTON";
+	default:
+		LOG_DEBUG("vca ioctl command name for %lx not found!\n", ioctl_cmd);
+		return "";
+	};
+}
+
+enum vca_card_type get_card_type(int card_id)
+{
+	close_on_exit card_fd(open_card_fd(card_id));
+	if (!card_fd)
+		return VCA_UNKNOWN;
+	vca_card_type type;
+	if (!vca_ioctl(card_fd, VCA_READ_CARD_TYPE, &type))
+		return VCA_UNKNOWN;
+	return type;
 }
 
 int count_available_nodes() {

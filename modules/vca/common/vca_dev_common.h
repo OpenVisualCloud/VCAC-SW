@@ -111,7 +111,7 @@ struct vca_device_ctrl {
  * @sys_config_dma_addr: dma mapped memory of sys_config
  * @sys_config_size: size of sys_config_dma_addr
  * @card_csa_mem_dma_addr: dma mapped csa memory from card
- * @card_csa_mem_size: size of card_csa_mem_dma_addr
+ * @card_csa_mem_info: size of card_csa_mem_dma_addr
  * @h2c_csa_mem_db: doorbell number to be used by csa_mem. Set by host.
  * @csa_command: command for vca_csa to execute
  * @csa_finished: signals if card mapped new memory in card_csa_mem_dma_addr
@@ -134,7 +134,7 @@ struct vca_bootparam {
 	__u64 sys_config_dma_addr;
 	__u32 sys_config_size;
 	__u64 card_csa_mem_dma_addr;
-	__u32 card_csa_mem_size;
+	__u32 card_csa_mem_info;
 	__s8 h2c_csa_mem_db;
 	__u8 csa_command;
 	__u8 csa_finished;

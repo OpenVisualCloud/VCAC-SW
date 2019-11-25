@@ -72,7 +72,6 @@ do_chroot "${CHROOT_DIR}" /bin/bash << EOF || die "Could not configure operating
 		set -eu
 
 		depmod -a "\$(ls /lib/modules/)" # this requires the kmod package to be installed
-		chmod a-x /lib/systemd/system/vca_agent.service
 		/sbin/vca_setup.sh card			 # this requires /sbin/modprobe, /etc/modprobe.d/vca.conf, /etc/udev/rules.d/97-eth_up.rules
 		cp /sbin/vca_* /usr/sbin/
 

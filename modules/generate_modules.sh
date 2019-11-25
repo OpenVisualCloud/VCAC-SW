@@ -82,8 +82,7 @@ function generate_modules_ubuntu {
 	tar --exclude './.*' -zcf "${OUT_DIR}/${_SRC_ARCHIVE_NAME}" . || die 'Could not make source archive ${OUT_DIR}/${_SRC_ARCHIVE_NAME}'
 
 	# actual build
-	ls -ld "/lib/modules" || true
-	sudo mkdir -p "/lib/modules/${KER_VER}"	# otherwise make needs root privileges
+	sudo mkdir -p "/lib/modules/${KER_VER}"	# otherwise make below needs root privileges
 
 	make -j "$(nproc)" OS=UBUNTU VCASS_BUILDNO="${PKG_VER}" VCA_CARD_ARCH=l1om KERNEL_VERSION="${KER_VER}" KERNEL_SRC="${KERNEL_SRC}" \
 		|| die 'Error executing make'
@@ -93,6 +92,7 @@ function generate_modules_ubuntu {
 		--pkgname="vcass-modules-${KER_VER}" \
 		--pkgversion="$PKG_VER" \
 		--pakdir="${OUT_DIR}" \
+		--requires="linux-image-${KER_VER}" \
 		make install VCA_CARD_ARCH=l1om KERNEL_VERSION="${KER_VER}" KERNEL_SRC="${KERNEL_SRC}" KERNELRELEASE="$(ls ${KERNEL_DEVEL}/lib/modules)" \
 			|| die 'Make install failed'
 	# transfer any left Debian files to the directory expected by QB:

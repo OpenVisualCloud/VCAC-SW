@@ -154,23 +154,23 @@ static long vca_cpu_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 		switch(cmd) {
 			case LBP_BOOT_RAMDISK:
 				ret = cdev->hw_ops->lbp_boot_ramdisk(cdev,
-					desc.mem, desc.mem_size);
+					desc.mem, desc.mem_info);
 				break;
 			case LBP_FLASH_BIOS:
 				ret = cdev->hw_ops->lbp_flash_bios(cdev,
-					desc.mem, desc.mem_size);
+					desc.mem, desc.mem_info);
 				break;
 			case LBP_CLEAR_SMB_EVENT_LOG:
 				ret = cdev->hw_ops->lbp_clear_smb_event_log(cdev,
-					desc.mem, desc.mem_size);
+					desc.mem, desc.mem_info);
 				break;
 			case LBP_SET_SERIAL_NR:
 				ret = cdev->hw_ops->lbp_set_serial_number(cdev,
-					desc.mem, desc.mem_size);
+					desc.mem, desc.mem_info);
 				break;
 			case LBP_UPDATE_MAC_ADDR:
 				ret = cdev->hw_ops->lbp_update_mac_addr(cdev,
-					desc.mem, desc.mem_size);
+					desc.mem, desc.mem_info);
 				break;
 		}
 		if (copy_to_user(
@@ -261,9 +261,9 @@ static long vca_cpu_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 		}
 		break;
 	}
-	case VCA_GET_MEM_SIZE:
+	case VCA_GET_MEM_INFO:
 	{
-		int ret = cdev->hw_ops->get_memsize(cdev);
+		int ret = cdev->hw_ops->get_meminfo(cdev);
 		if (copy_to_user(
 			(int __user *)argp,
 			&ret,

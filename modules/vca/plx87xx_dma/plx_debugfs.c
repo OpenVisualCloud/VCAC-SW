@@ -152,13 +152,13 @@ static const struct file_operations plx_dma_reg_ops = {
 	.release = single_release
 };
 
-static int plx_dma_reg_map_open(struct inode *inode, struct file *file)
+static int plx_dma_file_open(struct inode *inode, struct file *file)
 {
 	file->private_data = inode->i_private;
 	return 0;
 }
 
-static int plx_dma_reg_map_release(struct inode *inode, struct file *file)
+static int plx_dma_file_release(struct inode *inode, struct file *file)
 {
 	return 0;
 }
@@ -286,12 +286,12 @@ static ssize_t plx_dma_reg_map_write(struct file* file, const char* __user buff,
 
 static const struct file_operations plx_dma_reg_map_ops = {
 	.owner   = THIS_MODULE,
-	.open    = plx_dma_reg_map_open,
+	.open    = plx_dma_file_open,
 	.read    = plx_dma_reg_map_read,
 #if PLX_MEM_DEBUG
 	.write   = plx_dma_reg_map_write,
 #endif /* PLX_MEM_DEBUG */
-	.release = plx_dma_reg_map_release
+	.release = plx_dma_file_release
 };
 
 static int plx_dma_desc_ring_seq_show(struct seq_file *s, void *pos)
@@ -647,6 +647,171 @@ static const struct file_operations plx_dma_dump_regs_single_ops = {
 	.release = single_release
 };
 
+static ssize_t plx_fault_injection_read(struct file *file,
+		 char __user *buf, size_t count, loff_t *pos)
+{
+	unsigned size = 4096;
+	char *tmp_buff = kmalloc(size, GFP_KERNEL);
+	char *end = tmp_buff + size;
+	char *tmp = tmp_buff;
+
+	struct plx_dma_device *plx_dma_dev = file->private_data;
+	struct plx_dma_chan *ch = &plx_dma_dev->plx_chan;
+
+	if (!tmp_buff)
+		return -ENOMEM;
+
+	tmp += snprintf(tmp, end - tmp, "DMA FAULT STATUS:\n");
+
+	tmp += snprintf(tmp, end - tmp, "DMA Abort flag: %s\n",
+			(ch->dma_hang_mode & DMA_MODE_ABORT)?"True":"False");
+
+	tmp += snprintf(tmp, end - tmp, "DMA Hang: %s\n",
+			plx_get_dma_hang(ch)?"True":"False");
+
+	tmp += snprintf(tmp, end - tmp, "DMA Mode: %s\n",
+			plx_get_dma_mode_force_fail(ch)?"1 fail force":"0 hw");
+
+	tmp += snprintf(tmp, end - tmp, "DMA Transfer finish Fault Injection: %s\n",
+			plx_get_dma_fault_injection(ch)?"True":"False");
+
+	tmp += snprintf(tmp, end - tmp, "DMA Callback wait: repeat %u, time: %lu[ms]\n",
+			ch->watchdog.callback_wait_repeat, ch->watchdog.callback_wait_ms);
+
+	tmp += snprintf(tmp, end - tmp, "DMA Watchdog enable: %s\n",
+			ch->watchdog.watchdog_enable?"True":"False");
+
+	tmp += snprintf(tmp, end - tmp, "Change DMA Mode: Write 'm[0-1]' "
+			"If not 0 then return error when call DMA device_prep_dma_memcpy()\n");
+	tmp += snprintf(tmp, end - tmp, "Change DMA Transfer finish Fault Injection: Write 'f[0-1]'  "
+			"If not 0 then return error on finish status transfer\n");
+	tmp += snprintf(tmp, end - tmp, "Try DMA HANG: Write 'hang0' \n");
+	tmp += snprintf(tmp, end - tmp, "Set DMA Abort: Write 'a0' \n");
+	tmp += snprintf(tmp, end - tmp, "Set wait (plx_dma_cleanup())after any DMA"
+			" finish transfer: Write 'wait[repeat]ms[time_ms]' wait30ms1000\n");
+	tmp += snprintf(tmp, end - tmp, "Set Watchdog enable Write 'watch_enable[0-1]\n");
+
+	size = simple_read_from_buffer(buf, count, pos, tmp_buff, tmp - tmp_buff);
+	kfree(tmp_buff);
+	return size;
+}
+
+static ssize_t plx_dma_fault_injection_write(struct file* file, const char* __user buff,
+		size_t count, loff_t *ppos)
+{
+	struct plx_dma_device *plx_dma_dev = file->private_data;
+	struct plx_dma_chan *ch = &plx_dma_dev->plx_chan;
+	char temp[128];
+	s32 s32_val;
+	u32 u32_val;
+	unsigned long ul_val;
+
+	if(count >= sizeof(temp)) {
+		printk(KERN_INFO "%s:%d too much params\n", __FILE__, __LINE__);
+		return -E2BIG;
+	}
+
+	if(copy_from_user(temp, buff, count)) {
+		printk(KERN_INFO "%s:%d copy_from_user err\n", __FILE__, __LINE__);
+		return -EFAULT;
+	}
+
+	temp[count] = '\0';
+
+	if (1 == sscanf(temp, "m%d", &s32_val)) {
+		/* Set mode */
+		if (s32_val >= 0 && s32_val < 2) {
+			if (s32_val) {
+				plx_set_dma_mode(ch, DMA_MODE_FORCE_FAIL, DMA_MODE_FORCE_FAIL);
+			} else {
+				plx_set_dma_mode(ch, DMA_MODE_FORCE_FAIL, 0);
+			}
+		}
+		return count;
+	}
+
+	if (1 == sscanf(temp, "f%d", &s32_val)) {
+		if (s32_val >= 0 && s32_val < 2) {
+			/* Set fault */
+			if (s32_val) {
+				plx_set_dma_mode(ch, DMA_MODE_FAULT_INJECTION,
+						DMA_MODE_FAULT_INJECTION);
+			} else {
+				plx_set_dma_mode(ch, DMA_MODE_FAULT_INJECTION, 0);
+			}
+		}
+		return count;
+	}
+
+	if (1 == sscanf(temp, "hang%d", &s32_val)) {
+		struct dma_chan *dma_ch = &ch->chan;
+		/* Try dma HANG issue */
+		if (!dma_ch) {
+			printk(KERN_INFO "%s:%d DMA channel is null\n", __FILE__, __LINE__);
+		} else {
+			struct dma_device *ddev = dma_ch->device;
+			struct dma_async_tx_descriptor *tx;
+			tx = ddev->device_prep_dma_memcpy(dma_ch,
+					(dma_addr_t)0xFFFFFF, (dma_addr_t)0xFFFFFFFFFFFF,
+					0, DMA_PREP_FENCE);
+			if (!tx) {
+				printk(KERN_INFO "%s:%d Interrupt Test Error tx!\n", __FILE__, __LINE__);
+			} else {
+				dma_cookie_t cookie = tx->tx_submit(tx);
+				if (dma_submit_error(cookie)) {
+					printk(KERN_INFO "%s:%d interrupt Test Error submit!\n",
+							__FILE__, __LINE__);
+				} else {
+					dma_async_issue_pending(dma_ch);
+				}
+			}
+		}
+		return count;
+	}
+
+	if (1 == sscanf(temp, "a%d", &s32_val)) {
+		if (s32_val >= 0 && s32_val < 2) {
+			/* Set abort */
+			plx_set_abort(ch);
+			return count;
+		} else {
+			printk(KERN_INFO "%s:%d Invalid value: %i\n", __FILE__, __LINE__, s32_val);
+			return -EINVAL;
+		}
+	}
+
+	if (2 == sscanf(temp, "wait%ums%lu", &u32_val, &ul_val)) {
+		printk(KERN_INFO "%s:%d Set DMA Callback wait: repeat %u, time: %lu[ms]\n",
+				__FILE__, __LINE__, u32_val, ul_val);
+		ch->watchdog.callback_wait_repeat = u32_val;
+		ch->watchdog.callback_wait_ms = ul_val;
+		return count;
+	}
+
+	if (1 == sscanf(temp, "watch_enable%d", &s32_val)) {
+		if (s32_val >= 0 && s32_val < 2) {
+			printk(KERN_INFO "%s:%d Set DMA Watchdog: %s\n",
+					__FILE__, __LINE__, s32_val?"True":"False");
+			ch->watchdog.watchdog_enable = s32_val;
+			return count;
+		} else {
+			printk(KERN_INFO "%s:%d Invalid value: %i\n", __FILE__, __LINE__, s32_val);
+			return -EINVAL;
+		}
+	}
+
+	printk(KERN_INFO "%s:%d Can't parse params: %s\n", __FILE__, __LINE__, temp);
+	return -ENOEXEC;
+}
+
+static const struct file_operations plx_dma_fault_injection_ops = {
+	.owner   = THIS_MODULE,
+	.open    = plx_dma_file_open,
+	.read    = plx_fault_injection_read,
+	.write   = plx_dma_fault_injection_write,
+	.release = plx_dma_file_release
+};
+
 void plx_debugfs_init(struct plx_dma_device *plx_dma_dev)
 {
 	struct dma_device *dma_dev = &plx_dma_dev->dma_dev;
@@ -683,6 +848,9 @@ void plx_debugfs_init(struct plx_dma_device *plx_dma_dev)
 			debugfs_create_file("dump_regs_single", 0444,
 					    plx_dma_dev->dbg_dir, plx_dma_dev,
 					    &plx_dma_dump_regs_single_ops);
+			debugfs_create_file("fault_injection", 0444,
+					    plx_dma_dev->dbg_dir, plx_dma_dev,
+					    &plx_dma_fault_injection_ops);
 		}
 	}
 }

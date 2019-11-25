@@ -54,6 +54,13 @@ struct vca_eeprom_desc {
 	char buf[]; /* char[data_size] */
 };
 
+/**
+ * struct vca_ioctl_buffer: structure for use with vca_mgr_ioctl
+ */
+struct vca_ioctl_buffer {
+	char buf[128];
+};
+
 #define VCA_RESET _IOWR('s', 1, struct vca_ioctl_desc *)
 
 #define VCA_READ_CPU_NUM _IOR('s', 2, __u32 *)
@@ -66,7 +73,7 @@ struct vca_eeprom_desc {
 
 #define VCA_POWER_BUTTON _IOWR('s', 6, struct vca_ioctl_desc *)
 
-#define VCA_READ_MODULES_BUILD _IOR('s', 7, char *)
+#define VCA_READ_MODULES_BUILD _IOR('s', 7, struct vca_ioctl_buffer *)
 
 #define VCA_CHECK_POWER_BUTTON _IOWR('s', 8, struct vca_ioctl_desc *)
 

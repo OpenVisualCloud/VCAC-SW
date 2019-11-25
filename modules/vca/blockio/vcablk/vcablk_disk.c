@@ -126,7 +126,8 @@ struct vcablk_disk {
 	bool read_only;
 	int dev_id;
 
-	struct task_struct	*request_thread;   /* Request task */
+	volatile bool request_thread_run; /* Request task work flag */
+	struct completion request_thread_done;
 	wait_queue_head_t	request_event;     /* wait queue for incoming requests */
 	wait_queue_head_t	request_ring_wait; /* wait queue for release request_ring */
 	int bio_done_db;
@@ -531,11 +532,10 @@ end:
 #undef GBIOVP
 }
 
-
 static int
 vcablk_disk_thread_stop(struct vcablk_disk *dev)
 {
-	int ret = kthread_should_stop();
+	int ret = !dev->request_thread_run;
 	if (ret) {
 		pr_warn("%s: %s Thread should stop\n", dev->gdisk->disk_name, __func__);
 	}
@@ -570,6 +570,7 @@ vcablk_disk_make_request_thread(void *data)
 		vcablk_disk_async_request(dev, req, vcablk_disk_thread_stop);
 	}
 	pr_debug("%s: Thread stop\n", __func__);
+	complete(&dev->request_thread_done);
 	do_exit(0);
 	return 0;
 }
@@ -777,6 +778,7 @@ vcablk_disk_destroy(struct vcablk_disk *dev)
 {
 	struct vcablk_dev* fdev;
 	int err = 0;
+	int ret;
 	int dev_id;
 
 	/* Check that device created */
@@ -793,9 +795,13 @@ vcablk_disk_destroy(struct vcablk_disk *dev)
 
 	pr_debug("%s: destroy device id %i\n", __func__, dev->dev_id);
 
-	if (dev->request_thread) {
-		kthread_stop(dev->request_thread);
-		dev->request_thread = NULL;
+	if (dev->request_thread_run) {
+		dev->request_thread_run = false;
+		wake_up(&dev->request_event);
+		ret = wait_for_completion_interruptible(&dev->request_thread_done);
+		if (ret < 0) {
+			pr_err("%s: thread request_thread are still running\n", __func__);
+		}
 	}
 
 	vcablk_pool_deinit(dev->bio_context_pool);
@@ -877,6 +883,7 @@ vcablk_disk_create(struct vcablk_dev* fdev, int uniq_id, size_t size, bool read_
 	struct vcablk_disk *dev = NULL;
 	unsigned sectors_num;
 	int hardsect_size;
+	struct task_struct *thread;
 
 	if (!ring_req) {
 		pr_err("%s: Disk with ID %i ring_req is NULL\n", __func__, uniq_id);
@@ -1021,17 +1028,20 @@ vcablk_disk_create(struct vcablk_dev* fdev, int uniq_id, size_t size, bool read_
 	dev->gdisk_started = false;
 
 	//MOVED TO START
-	dev->request_thread = kthread_create(vcablk_disk_make_request_thread, dev,
-			disk->disk_name);
-	if (IS_ERR(dev->request_thread)) {
+	init_completion(&dev->request_thread_done);
+	dev->request_thread_run = false;
+	thread = kthread_create(vcablk_disk_make_request_thread, dev, disk->disk_name);
+	if (IS_ERR(thread)) {
 		pr_err("%s: Can not create thread %i\n", __func__,
-				(int)PTR_ERR(dev->request_thread));
-		dev->request_thread = NULL;
+				(int)PTR_ERR(thread));
 		err = -EAGAIN;
 		goto err;
+	} else {
+		dev->request_thread_run = true;
+		wake_up_process(thread);
 	}
 
-	wake_up_process(dev->request_thread);
+
 	return dev;
 err:
 	vcablk_disk_destroy(dev);
@@ -1055,7 +1065,7 @@ vcablk_disk_start(struct vcablk_disk *dev)
 		goto exit;
 	}
 
-	if (!dev->request_thread) {
+	if (!dev->request_thread_run) {
 		pr_err("%s: Bdev id %i thread not created\n", __func__, dev->dev_id);
 			err = -EINVAL;
 			goto err;

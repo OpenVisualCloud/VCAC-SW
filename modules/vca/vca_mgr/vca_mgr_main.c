@@ -248,8 +248,9 @@ static long vca_mgr_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 	}
 	case VCA_READ_MODULES_BUILD:
 	{
-		const char modules_build[] = "Build number: "BUILD_NUMBER " build on: "BUILD_ONDATE;
-		if (copy_to_user(argp, modules_build, sizeof(modules_build))) {
+		const char modules_build_text[] = BUILD_NUMBER " build on " BUILD_ONDATE;
+		struct vca_ioctl_buffer *pmodules_build = (struct vca_ioctl_buffer *)argp;
+		if (copy_to_user(pmodules_build->buf, modules_build_text, min(sizeof(modules_build_text), sizeof(pmodules_build->buf)))) {
 			rc = -EFAULT;
 			goto finish;
 		}

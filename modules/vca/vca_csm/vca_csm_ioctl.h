@@ -30,11 +30,11 @@
  *
  * @ret: return value from IOCTL
  * @mem: pointer to memory in user space
- * @mem_size: size of memory in @mem
+ * @mem_info: size of memory in @mem
  */
 struct vca_csm_ioctl_mem_desc {
 	void *mem;
-	size_t mem_size;
+	size_t mem_info;
 	enum vca_lbp_retval ret;
 };
 
@@ -135,7 +135,7 @@ struct vca_csm_ioctl_agent_cmd {
 
 #define VCA_WRITE_SPAD_POWER_OFF _IO('s', 20)
 
-#define VCA_GET_MEM_SIZE _IOWR('s', 22, int *)
+#define VCA_GET_MEM_INFO _IOWR('s', 22, int *)
 
 #define LBP_SET_SERIAL_NR _IOWR('s', 23, struct vca_csm_ioctl_mem_desc *)
 

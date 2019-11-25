@@ -122,7 +122,7 @@ struct vca_csm_hw_ops {
 	void (*get_card_and_cpu_id)(struct vca_csm_device *cdev,
 		u8 *out_card_id, u8 *out_cpu_id);
 	u32 (*get_cpu_num)(struct vca_csm_device *cdev);
-	u32 (*get_memsize)(struct vca_csm_device *cdev);
+	u32(*get_meminfo)(struct vca_csm_device *cdev);
 	u32 (*link_width)(struct vca_csm_device *cdev);
 	u32 (*link_status)(struct vca_csm_device *cdev);
 	enum vca_card_type(*get_card_type)(struct vca_csm_device *cdev);

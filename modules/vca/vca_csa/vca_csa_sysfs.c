@@ -87,12 +87,22 @@ csa_mem_show(struct device *dev, struct device_attribute *attr,
 	case VCA_AGENT_CPU_UUID:
 		count = snprintf(buf, PAGE_SIZE, "cpu_uuid");
 		break;
+	case VCA_AGENT_MEM_INFO:
+		count = snprintf(buf, PAGE_SIZE, "memory_info");
+		break;
 	case VCA_AGENT_NODE_STATS:
 		count = snprintf(buf, PAGE_SIZE, "node_stats");
 		break;
 	case VCA_AGENT_SN_INFO:
 		count = snprintf(buf, PAGE_SIZE, "SN");
 		break;
+	case VCA_AGENT_MODE_DMA:
+		strcpy(buf, "mode_dma");
+		return 8;
+	case VCA_AGENT_MODE_MEMCPY:
+		strcpy(buf, "mode_memcpy");
+		return 11;
+	case VCA_AGENT_DMA_INFO: strcpy(buf, "dma_info"); return 8;
 	default:
 		buf[0] = 0;
 		count = 0;

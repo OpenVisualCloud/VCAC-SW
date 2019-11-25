@@ -62,6 +62,8 @@ rsyslog        #dependency for GSS Proxy API
 
 # for KVM
 libvirt
+virt-manager
+lshw
 virt-install
 bridge-utils
 qemu-kvm

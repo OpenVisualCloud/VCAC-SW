@@ -2,6 +2,7 @@
 #define _VCA_DEVICES_H_
 
 #include "helper_funcs.h"
+#include "vca_common.h"
 
 #define DEV_PATH		"/dev/"
 #define VCA_MGR_DEV_PATH	"/dev/vca_mgr"
@@ -10,6 +11,9 @@
 #define VCA_BLK_DEV_PATH	"/dev/vca_blk_bcknd"
 #define VCA_PXE_DEV_PATH	"/dev/vcapxe"
 
+bool vca_ioctl(filehandle_t fd, unsigned long ioctl_cmd, void *arg);
+const char *get_vca_ioctl_name(unsigned long ioctl_cmd);
+enum vca_card_type get_card_type(int card_id);
 bool card_exists(int card_id);
 unsigned get_cards_num();
 int count_available_nodes();

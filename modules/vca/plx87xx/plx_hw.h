@@ -266,7 +266,7 @@ int plx_card_check_power_button_state(struct plx_device *xdev, int cpu_id);
 int plx_card_press_power_button(struct plx_device *xdev,
 	struct completion *compl, int cpu_id, bool on, struct completion *wait_start);
 u32 plx_get_cpu_num(struct plx_device *xdev);
-u32 plx_get_memsize(struct plx_device *xdev);
+u32 plx_get_meminfo(struct plx_device *xdev);
 int plx_identify_cpu_id(struct pci_dev *pdev);
 void plx_set_SMB_id(struct plx_device *xdev, u8 id);
 enum plx_eep_retval plx_update_eeprom(struct plx_device *xdev,

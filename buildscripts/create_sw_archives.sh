@@ -19,9 +19,7 @@ stderr(){
 	echo "*** $*" >&2
 }
 die(){
-	EXIT_CODE=$?
-	set +x
-	EXIT_CODE=$((EXIT_CODE == 0 ? 99 : EXIT_CODE))
+	local EXIT_CODE=$(( $? == 0 ? 99 : $? ))
 	stderr "ERROR: $*"
 	exit ${EXIT_CODE}
 }

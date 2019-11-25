@@ -134,7 +134,7 @@
                     <RequiresUserInput>false</RequiresUserInput>
                 </SynchronousCommand>
                 <SynchronousCommand wcm:action="add">
-                    <CommandLine>%SystemDrive%\VCA\OpenSSH\setupssh-7.4p1-1.exe /password=q3VC@123 /S</CommandLine>
+                    <CommandLine>%SystemDrive%\VCA\OpenSSH\setupssh-8.0p1-2.exe /password=q3VC@123 /S</CommandLine>
                     <Description>Install OpenSSH</Description>
                     <Order>5</Order>
                     <RequiresUserInput>false</RequiresUserInput>
@@ -185,6 +185,18 @@
                     <CommandLine>Reg add "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" /v PagingFiles /t REG_MULTI_SZ /d "C:\pagefile.sys 4000 32000" /f</CommandLine>
                     <Description>Change pagefile size</Description>
                     <Order>13</Order>
+                    <RequiresUserInput>false</RequiresUserInput>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
+                    <CommandLine>powercfg -setacvalueindex SCHEME_CURRENT 4f971e89-eebd-4455-a8de-9e59040e7347 7648efa3-dd9c-4e3e-b566-50f929386280 3 && powercfg -SetActive SCHEME_CURRENT</CommandLine>
+                    <Description>Set 'Shut down' as default action of power button</Description>
+                    <Order>14</Order>
+                    <RequiresUserInput>false</RequiresUserInput>
+                </SynchronousCommand>
+                <SynchronousCommand wcm:action="add">
+                    <CommandLine>powershell -command "Get-CimInstance win32_service -filter \"name='OpenSSHd'\" | Invoke-CimMethod -Name Change -Arguments @{StartName=\"LocalSystem\"};  Start-Service -name \"OpenSSHd\""</CommandLine>
+                    <Description>Change sshd user to LocalSystem</Description>
+                    <Order>15</Order>
                     <RequiresUserInput>false</RequiresUserInput>
                 </SynchronousCommand>
             </FirstLogonCommands>

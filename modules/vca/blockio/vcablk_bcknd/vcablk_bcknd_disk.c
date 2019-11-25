@@ -39,6 +39,17 @@
 #include "vcablk_bcknd_media.h"
 #include "../vcablk/vcablk_pool.h"
 
+#define pr_err_once_dbg_later(...) \
+	do { \
+	static bool err_print = true; \
+	if (err_print) { \
+		err_print = false; \
+		pr_err(__VA_ARGS__); \
+		pr_err("[%s:%d Next occurrences will be logged at debug level]\n", __func__, __LINE__); \
+	}  else { \
+		pr_debug(__VA_ARGS__); \
+	} } while (0)
+
 //#define BLOCKIO_FORCE_MEMCPY
 //#define BLOCKIO_FORCE_DMA_SYNC
 
@@ -82,7 +93,8 @@ typedef struct {
 	struct vcablk_bcknd_disk *bckd;
 	unsigned long sector;
 	unsigned long nsec;
-	void *remapped;
+	void *remapped_transfer;
+	void *remapped_unmap;
 	int response_cookie;
 	bool is_write;
 	bool do_flush;
@@ -111,14 +123,14 @@ struct vcablk_bcknd_disk {
 	/* Request IRQ */
 	int request_db;
 	void *request_irq;
-	struct task_struct *request_process_thread;
+	volatile bool request_process_thread_run;
+	struct completion request_process_thread_done;
 	wait_queue_head_t request_wq;
-	wait_queue_head_t threads_exit_wq;
-	atomic_t threads_count;
 
 	/* DMA callback handling */
-	struct task_struct *transfer_thread; /* DMA callback consumer */
-	wait_queue_head_t   transfer_wq;
+	volatile bool transfer_thread_run;
+	struct completion transfer_thread_done; /* DMA callback consumer */
+	wait_queue_head_t transfer_wq;
 	struct vcablk_ring *transfer_ring;
 
 	spinlock_t send_resp_lock; /* vcablk_bcknd_disk_send_response lock */
@@ -142,6 +154,10 @@ struct vcablk_bcknd_disk {
 	wait_queue_head_t transfer_buffer_pool_wq;
 
 };
+
+static int
+vcablk_bcknd_transfer_device_memcpy(struct vcablk_bcknd_disk *bckd,
+		transfer_parameters_t *transfer_params);
 
 void vcablk_bcknd_buffer_deinit(vcablk_pool_t *vcablk_buffer_pool, struct dma_chan *dma_ch)
 {
@@ -303,13 +319,29 @@ static void vca_bcknd_callback_dma(void *arg)
 	vcablk_buffer *buffer = &dma_args->buffer;
 	__u16 size, last_add, last_used;
 
-	if (data->remapped) {
-		bckd->bdev->hw_ops->iounmap(bckd->bdev->mdev.parent, data->remapped);
-		wake_up_all(&bckd->ioremap_wq);
-		data->remapped = NULL;
+	if (dma_args->tx) {
+		enum dma_status status  = dma_async_is_tx_complete(bckd->bdev->dma_ch,
+				dma_args->tx->cookie , NULL, NULL);
+
+		if (status == DMA_ERROR) {
+			/* MEMCPY path RECOVERY*/
+				printk(KERN_ERR "%s Failed DMA transfer. "
+						"Attempting again by using memcpy.\n",
+								__func__);
+				dma_args->tx = NULL;
+
+				vcablk_bcknd_transfer_device_memcpy(bckd, dma_args);
+				return;
+		}
 	}
 
-	if (!bckd->transfer_thread || !ring) {
+	if (data->remapped_unmap) {
+		bckd->bdev->hw_ops->iounmap(bckd->bdev->mdev.parent, data->remapped_unmap);
+		wake_up_all(&bckd->ioremap_wq);
+		data->remapped_unmap = NULL;
+	}
+
+	if (!bckd->transfer_thread_run || !ring) {
 		/* BLOCKIO_FORCE_MEMCPY == 1 */
 		vca_bcknd_complete_transfer(dma_args);
 		return;
@@ -372,26 +404,16 @@ static void *vcablk_bcknd_ioremap(struct vcablk_bcknd_disk *bckd,
 	return remapped;
 }
 
-static int
-vcablk_bcknd_transfer_device(struct vcablk_bcknd_disk *bckd,
-		transfer_parameters_t *transfer_params,
-		void *remapped,
-		unsigned long bytes)
-{
-	int ret = 0;
-	bool write = transfer_params->callback_param.is_write;
 
-	if (!bckd->bdev->dma_ch) {
-		/* MEMCPY */
-		if (write) {
-			memcpy_fromio(transfer_params->buffer.buffer, remapped, bytes);
-		} else {
-			memcpy_toio(remapped, transfer_params->buffer.buffer, bytes);
-			wmb();
-			ioread8(remapped + bytes -1);
-		}
-		vca_bcknd_callback_dma(transfer_params);
-	} else {
+static int
+vcablk_bcknd_transfer_device_dma(struct vcablk_bcknd_disk *bckd,
+		transfer_parameters_t *transfer_params)
+{
+	int ret = -EINVAL;
+	bool write = transfer_params->callback_param.is_write;
+	void *remapped = transfer_params->callback_param.remapped_transfer;
+	unsigned long bytes = transfer_params->callback_param.nsec << SECTOR_SHIFT;
+
 #ifdef BLOCKIO_FORCE_DMA_SYNC
 		/* DMA SYNC */
 		if (write) {
@@ -427,13 +449,54 @@ vcablk_bcknd_transfer_device(struct vcablk_bcknd_disk *bckd,
 					bytes, vca_bcknd_callback_dma, transfer_params, &transfer_params->tx);
 		}
 
-		if (dma_submit_error(dma_cookie)) {
-			printk(KERN_ERR "%s: DMA transfer error %i Backend %i "
+		ret = dma_submit_error(dma_cookie);
+		if (ret) {
+			/* For issues in DMA driver module switch on memcpy mode.
+			 * To reduce dmesg messages, there will be only one
+			 * notification about run this path.*/
+			pr_err_once_dbg_later("%s: DMA transfer error %i Backend %i "
 					"DMA error occurred, dma cookie: %d.\n",
 					__func__, ret, bckd->bcknd_id, dma_cookie);
-			ret = -ENOMEM;
 		}
 #endif /* BLOCKIO_FORCE_DMA_SYNC */
+	return ret;
+}
+
+
+static int
+vcablk_bcknd_transfer_device_memcpy(struct vcablk_bcknd_disk *bckd,
+		transfer_parameters_t *transfer_params)
+{
+	bool write = transfer_params->callback_param.is_write;
+	void *remapped = transfer_params->callback_param.remapped_transfer;
+	unsigned long bytes = transfer_params->callback_param.nsec << SECTOR_SHIFT;
+
+	/* MEMCPY */
+	if (write) {
+		memcpy_fromio(transfer_params->buffer.buffer, remapped, bytes);
+	} else {
+		memcpy_toio(remapped, transfer_params->buffer.buffer, bytes);
+		wmb();
+		ioread8(remapped + bytes -1);
+	}
+	vca_bcknd_callback_dma(transfer_params);
+	return 0;
+}
+
+static int
+vcablk_bcknd_transfer_device(struct vcablk_bcknd_disk *bckd,
+		transfer_parameters_t *transfer_params)
+{
+	int ret = -EINVAL;
+
+	if (bckd->bdev->dma_ch) {
+		ret = vcablk_bcknd_transfer_device_dma(bckd, transfer_params);
+	}
+
+	/*If not transfer DMA, or DMA error then use memcpy mode*/
+	if (ret) {
+		/* MEMCPY */
+		ret = vcablk_bcknd_transfer_device_memcpy(bckd, 	transfer_params);
 	}
 	return ret;
 }
@@ -476,17 +539,19 @@ int vcablk_bcknd_transfer(struct vcablk_bcknd_disk *bckd,
 		if (!sectors_num) {
 			/* Last buffer */
 			transfer_params->callback_param.response_cookie = response_cookie;
-			transfer_params->callback_param.remapped = remapped;
+			transfer_params->callback_param.remapped_unmap = remapped;
 			transfer_params->callback_param.do_flush = do_flush;
 		} else {
 			transfer_params->callback_param.response_cookie = -1;
-			transfer_params->callback_param.remapped = NULL;
+			transfer_params->callback_param.remapped_unmap = NULL;
 			transfer_params->callback_param.do_flush = false;
 		}
 		transfer_params->callback_param.bckd = bckd;
 		transfer_params->callback_param.sector = sector;
 		transfer_params->callback_param.nsec = nsec;
 		transfer_params->callback_param.is_write = write;
+		transfer_params->callback_param.remapped_transfer = (void *) offset_ptr;
+
 
 		pr_debug("%s: phys_buff: %llu, sectors_num: %lu, nsec: %lu, bytes: %lu,"
 				" write: %i, response_cookie %i", __func__, phys_buff,
@@ -502,8 +567,7 @@ int vcablk_bcknd_transfer(struct vcablk_bcknd_disk *bckd,
 			}
 		}
 
-		ret = vcablk_bcknd_transfer_device(bckd, transfer_params,
-				(void *) offset_ptr, bytes);
+		ret = vcablk_bcknd_transfer_device(bckd, transfer_params);
 
 		if (ret) {
 			printk(KERN_ERR "%s: DMA transfer error %i Backend %i "
@@ -788,12 +852,12 @@ vcablk_bcknd_disk_make_request_thread(void *data)
 
 	pr_debug("%s: Thread start dev_id %i\n", __func__, bckd->bcknd_id);
 
-	while (!kthread_should_stop()) {
+	while (bckd->request_process_thread_run) {
 		wait_event_interruptible(bckd->request_wq,
 				ring_req->last_add != bckd->request_last_used ||
-				kthread_should_stop());
+				!bckd->request_process_thread_run);
 
-		if (bckd->state != DISK_STATE_OPEN || kthread_should_stop()) {
+		if (bckd->state != DISK_STATE_OPEN || !bckd->request_process_thread_run) {
 			pr_debug("%s: Thread start dev_id %i "
 					"DISK NOT OPEN or stop\n", __func__, bckd->bcknd_id);
 			continue;
@@ -805,7 +869,8 @@ vcablk_bcknd_disk_make_request_thread(void *data)
 		 * all incoming requests, to avoid OS report: lock CPU.
 		 * */
 		last_add = ring_req->last_add;
-		while (last_add != bckd->request_last_used && !kthread_should_stop()) {
+		while (last_add != bckd->request_last_used &&
+				bckd->request_process_thread_run) {
 			request_size = vcablk_bcknd_disk_get_next_request(bckd, request_buff);
 			if (request_size)
 				vcablk_bcknd_disk_request(bckd, request_buff, request_size);
@@ -813,9 +878,7 @@ vcablk_bcknd_disk_make_request_thread(void *data)
 	}
 
 	pr_debug("%s: Thread STOP dev_id %i\n", __func__, bckd->bcknd_id);
-	atomic_dec(&bckd->threads_count);
-	wake_up(&bckd->threads_exit_wq);
-
+	complete(&bckd->request_process_thread_done);
 	do_exit(0);
 	return 0;
 }
@@ -858,13 +921,14 @@ static int vcablk_bcknd_disk_make_transfer_thread(void *data)
 	pr_debug("%s: Transfer thread started, dev_id %i\n", __func__, bckd->bcknd_id);
 
 	size = ring->num_elems;
-	while (!kthread_should_stop()) {
+	while (bckd->transfer_thread_run) {
 		/* wait for wake_up with nonempty ring */
 		if (wait_event_interruptible(bckd->transfer_wq,
-				!VCA_RB_BUFF_EMPTY(last_add = READ_ONCE(ring->last_add), last_used) || kthread_should_stop()))
+				!VCA_RB_BUFF_EMPTY(last_add = READ_ONCE(ring->last_add), last_used)
+				|| !bckd->transfer_thread_run))
 			continue; /* interrupt */
 
-		if (kthread_should_stop())
+		if (!bckd->transfer_thread_run)
 			break;
 
 		pr_debug("%s: head: %hu, tail: %hu!\n", __func__, last_add, last_used);
@@ -878,39 +942,34 @@ static int vcablk_bcknd_disk_make_transfer_thread(void *data)
 
 exit:
 	pr_debug("%s: Transfer thread stop dev_id %i\n", __func__, bckd->bcknd_id);
-	atomic_dec(&bckd->threads_count);
-	wake_up(&bckd->threads_exit_wq);
+	complete(&bckd->transfer_thread_done);
 	do_exit(ret);
 	return ret;
 }
 
 static void vcablk_bcknd_disk_end_threads(struct vcablk_bcknd_disk *bckd)
 {
-	int ret, start, timeout = msecs_to_jiffies(TIMEOUT_END_THREADS_MS);
+	int ret;
 
 	pr_debug("%s id=%i\n", __func__, bckd->bcknd_id);
-	if (bckd->request_process_thread) {
-		kthread_stop(bckd->request_process_thread);
-		bckd->request_process_thread = NULL;
+
+	if (bckd->request_process_thread_run) {
+		bckd->request_process_thread_run = false;
 		wake_up(&bckd->request_wq);
-	}
-	if (bckd->transfer_thread) {
-		kthread_stop(bckd->transfer_thread);
-		bckd->transfer_thread = NULL;
-		wake_up(&bckd->transfer_wq);
+		ret = wait_for_completion_interruptible(&bckd->request_process_thread_done);
+		if (ret < 0) {
+			pr_err("%s: thread request_process_thread are still running\n", __func__);
+		}
 	}
 
-	do {
-		start = jiffies;
-		ret = wait_event_interruptible_timeout(
-				bckd->threads_exit_wq,
-				atomic_read(&bckd->threads_count) == 0,
-				timeout);
-		timeout -= jiffies - start;
-	} while (ret == -ERESTARTSYS && timeout > 0);
-	if (ret <= 0)
-		pr_err("%s: some (%i) threads are still running after timeout\n",
-			__func__, atomic_read(&bckd->threads_count));
+	if (bckd->transfer_thread_run) {
+		bckd->transfer_thread_run = false;
+		wake_up(&bckd->transfer_wq);
+		ret = wait_for_completion_interruptible(&bckd->transfer_thread_done);
+		if (ret < 0) {
+			pr_err("%s: thread transfer_thread are still running\n", __func__);
+		}
+	}
 
 	if (bckd->transfer_ring) {
 		kfree(bckd->transfer_ring);
@@ -1053,7 +1112,10 @@ vcablk_bcknd_disk_create(struct vcablk_bcknd_dev *bdev,
 
 	init_waitqueue_head(&bckd->request_wq);
 	init_waitqueue_head(&bckd->probe_queue);
-	init_waitqueue_head(&bckd->threads_exit_wq);
+	init_completion(&bckd->request_process_thread_done);
+	init_completion(&bckd->transfer_thread_done);
+	bckd->request_process_thread_run = false;
+	bckd->transfer_thread_run = false;
 	spin_lock_init(&bckd->send_resp_lock);
 
 	return bckd;
@@ -1120,6 +1182,8 @@ vcablk_bcknd_disk_start(struct vcablk_bcknd_disk *bckd, int done_db,
 		__u64 request_ring_ph, __u64 request_ring_size,
 		__u64 completion_ring_ph, __u64 completion_ring_size)
 {
+	struct task_struct *thread_transfer = NULL;
+	struct task_struct *thread_process = NULL;
 	int err = 0;
 	pr_debug("%s: dev_id %i!!!\n", __func__, bckd->bcknd_id);
 	if (bckd->state != DISK_STATE_CREATE) {
@@ -1190,22 +1254,26 @@ vcablk_bcknd_disk_start(struct vcablk_bcknd_disk *bckd, int done_db,
 			goto err;
 		}
 
-		bckd->transfer_thread = kthread_create(vcablk_bcknd_disk_make_transfer_thread,
+		thread_transfer = kthread_create(vcablk_bcknd_disk_make_transfer_thread,
 				bckd, "vcablk_task_transfer");
-		if (IS_ERR(bckd->transfer_thread)) {
-			err = (int) PTR_ERR(bckd->transfer_thread);
-			bckd->transfer_thread = NULL;
+		if (IS_ERR(thread_transfer)) {
+			err = (int) PTR_ERR(thread_transfer);
+			thread_transfer = NULL;
+		} else {
+			bckd->transfer_thread_run = true;
 		}
 	} else {
 		pr_err("%s: Use MEMCPY\n", __func__);
 	}
 
-	bckd->request_process_thread = kthread_create(
+	thread_process= kthread_create(
 			vcablk_bcknd_disk_make_request_thread,
 			bckd, "vcablk_task_request");
-	if (IS_ERR(bckd->request_process_thread)) {
-		err = (int) PTR_ERR(bckd->request_process_thread);
-		bckd->request_process_thread = NULL;
+	if (IS_ERR(thread_process)) {
+		err = (int) PTR_ERR(thread_process);
+		thread_process = NULL;
+	} else {
+		bckd->request_process_thread_run = true;
 	}
 
 	if (err) {
@@ -1215,11 +1283,9 @@ vcablk_bcknd_disk_start(struct vcablk_bcknd_disk *bckd, int done_db,
 	}
 
 	bckd->state = DISK_STATE_OPEN;
-	atomic_inc(&bckd->threads_count);
-	wake_up_process(bckd->request_process_thread);
-	if (bckd->transfer_thread) {
-		atomic_inc(&bckd->threads_count);
-		wake_up_process(bckd->transfer_thread);
+	wake_up_process(thread_process);
+	if (thread_transfer) {
+		wake_up_process(thread_transfer);
 	}
 	goto exit;
 

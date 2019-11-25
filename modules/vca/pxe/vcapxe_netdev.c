@@ -24,6 +24,9 @@
 
 #include "vcapxe.h"
 #include "vcapxe_register.h"
+#include "vcapxe_netdev.h"
+
+#include "plx_hw_ops_pxe.h"
 
 static int vcapxe_ring_put_skb(struct vcapxe_ring *ring, struct sk_buff *skb)
 {
@@ -38,6 +41,9 @@ static int vcapxe_ring_put_skb(struct vcapxe_ring *ring, struct sk_buff *skb)
 		memcpy_toio(frame->frame_data, skb->data, skb->len);
 		frame->frame_len = skb->len;
 		wmb(); // make sure the write_index isn't incremented before writing the frame is finished
+
+		ioread32(&frame->frame_len); // read last PCI write addr to make sure previous writes got through
+
 		iowrite32(possible_next_write, &ring->write_index);
 		return 1;
 	}
@@ -83,8 +89,13 @@ static netdev_tx_t vcapxe_start_xmit(struct sk_buff *skb, struct net_device *net
 	int status = NETDEV_TX_OK;
 
 	if (shared != NULL) {
-		if (!vcapxe_ring_put_skb(&shared->h2n, skb))
-			netdev_warn(netdev, "trying to xmit but host to node buffer is full\n");
+		if (priv->hw_ops->is_pxe_booting(priv->xdev)) {
+			if (!vcapxe_ring_put_skb(&shared->h2n, skb))
+				netdev_warn(netdev, "trying to xmit but host to node buffer is full\n");
+		} else {
+			netdev_warn(netdev, "packet transmission requested but node isn't PXE booting anymore\n");
+			vcapxe_teardown_netdev(priv->pxe_dev);
+		}
 	} else netdev_warn(netdev, "trying to xmit but the PXE netcard has no shared buffer\n");
 
 	dev_kfree_skb(skb);
@@ -100,13 +111,19 @@ irqreturn_t vcapxe_doorbell_irq(int irq, void *data)
 {
 	struct vcapxe_private* priv = (struct vcapxe_private*) data;
 	struct vcapxe_shared* shared = priv->shared_area;
-	if (ioread32(&shared->shutdown) == 1)
-	{
-		// Kill the iface
-		schedule_work(&priv->shutdown_worker);
+
+	if (priv->hw_ops->is_pxe_booting(priv->xdev)) {
+		if (ioread32(&shared->shutdown) == 1)
+		{
+			// Kill the iface
+			schedule_work(&priv->shutdown_worker);
+		} else {
+			// Try to get as many packets as there are in the buffer.
+			while (vcapxe_ring_get_skb(&shared->n2h, priv->netdev)) ;
+		}
 	} else {
-		// Try to get as many packets as there are in the buffer.
-		while (vcapxe_ring_get_skb(&shared->n2h, priv->netdev)) ;
+		netdev_warn(priv->netdev, "doorbell is about to be serviced but node isn't PXE booting anymore\n");
+		vcapxe_teardown_netdev(priv->pxe_dev);
 	}
 	return IRQ_HANDLED;
 }

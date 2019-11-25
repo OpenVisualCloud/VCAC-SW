@@ -37,6 +37,8 @@ struct plx_pxe_hw_ops {
 	u32 (*read_spad)(struct plx_device *xdev, unsigned int idx);
 	void __iomem * (*ioremap)(struct plx_device *xdev, dma_addr_t pa, size_t len);
 	void (*iounmap)(struct plx_device *xdev, void __iomem *va);
+
+	int (*is_pxe_booting)(struct plx_device *xdev);
 };
 
 #endif // _PLX_HWOPS_PXE_H

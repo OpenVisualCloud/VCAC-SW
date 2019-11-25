@@ -439,7 +439,7 @@ bool vca_config::parse_global(boost::property_tree::ptree node)
 }
 
 #define XML_PARSING_ERROR_MSG "invalid entry in configuration file"
-extern "C" enum vca_card_type get_card_type(int card_id);
+enum vca_card_type get_card_type(int card_id);
 
 bool vca_config::parse_card(boost::property_tree::ptree node)
 {

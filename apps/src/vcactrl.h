@@ -66,7 +66,7 @@
 #define INFO_SUBCMD_SYSTEM			"system"
 #define INFO_SUBCMD_NODE_OS			"node-os"
 #define INFO_SUBCMD_NODE_BIOS		"BIOS"
-#define INFO_SUBCMD_NODE_MEMSIZE	"memsize"
+#define INFO_SUBCMD_NODE_MEMINFO	"meminfo"
 #define INFO_SUBCMD_CPU_UUID		"cpu-uuid"
 #define INFO_SUBCMD_NODE_STATS  "node-stats"
 

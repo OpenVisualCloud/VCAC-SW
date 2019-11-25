@@ -56,10 +56,11 @@ parse_parameters(){
 }
 
 clear_tmp_dir(){
-	local _TMP_DIR; _TO_UMOUNT
+	local _TMP_DIR _TO_UMOUNT
 	_TMP_DIR="$1"
-	_TO_UMOUNT=($(awk '{ print $2 }' /proc/mounts | grep "^${_TMP_DIR}" | awk -F/ '{ printf "%d*%s\n" , NF, $0 }' | sort -rn | awk -F'*' '{ print $2 }'))
-	[ ${#_TO_UMOUNT[@]} -gt 0 ] && {
+	_TO_UMOUNT=($(awk '{ print $2 }' /proc/mounts | grep "^${_TMP_DIR}" | awk -F/ '{ printf "%d*%s\n" , NF, $0 }' | sort -rn | awk -F'*' '{ print $2 }')) \
+			&& [ ${#_TO_UMOUNT[@]} -gt 0 ] && \
+	{
 		stderr "unmounting: ${_TO_UMOUNT[*]}"
 		umount "${_TO_UMOUNT[@]}" 2>/dev/null || true
 	}

@@ -65,24 +65,13 @@ bool is_root()
 	return (getuid() == 0);
 }
 
-bool path_exists(const char *path)
-{
-	return (boost::filesystem::exists(path) &&
-		boost::filesystem::is_directory(path));
-}
 
 bool file_exists(const char *filename)
 {
-	return (boost::filesystem::exists(filename) &&
-		boost::filesystem::is_regular_file(filename));
-}
-
-bool character_device_exists(const char *filename)
-{
-	boost::filesystem::file_status fs = boost::filesystem::status(filename);
-
-	return (boost::filesystem::exists(filename) &&
-		fs.type() == boost::filesystem::character_file);
+    struct stat buf;
+    if( stat( filename, &buf) == 0)
+        return S_ISREG( buf.st_mode);
+    return false;
 }
 
 size_t get_file_size(const char *filename)
@@ -190,7 +179,7 @@ int drop_root_privileges()
 }
 
 /* On success function change_group_and_mode() will change group to 'vcausers',
- * owner to 'vcausers_default, and mode to 664 (owner read/write, group read/write,
+ * and mode to 664 (owner read/write, group read/write,
  * others read-only). Parameter 'file' is a path to file which will be changed. */
 int change_group_and_mode(const char *file)
 {
@@ -514,7 +503,7 @@ filehandle_t open_path(const char* path, int flags)
 {
 	filehandle_t fd = open(path, flags);
 	if (fd < 0) {
-		LOG_DEBUG("Could not open %s\n", path);
+		LOG_FULL("Could not open %s\n", path);
 	}
 	return fd;
 }

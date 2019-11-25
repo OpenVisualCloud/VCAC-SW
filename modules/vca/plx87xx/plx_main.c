@@ -72,7 +72,6 @@ MODULE_DEVICE_TABLE(pci, plx_pci_tbl);
  * enum subsystem_id - subsystem ID for VCA cards.
  */
 enum subsystem_id {
-	SUBSYSTEM_ID_VV_POC      = 0x1000,
 	SUBSYSTEM_ID_VV_FAB1     = 0x1001,
 	SUBSYSTEM_ID_VV_FAB2     = 0x1002,
 	SUBSYSTEM_ID_MV_FAB1     = 0x1004,
@@ -612,8 +611,6 @@ exit:
 static enum vca_card_type plx_card_get_type(struct pci_dev *pdev)
 {
 	switch (pdev->subsystem_device) {
-	case SUBSYSTEM_ID_VV_POC:
-		return VCA_POC;
 	case SUBSYSTEM_ID_VV_FAB1:
 		return VCA_VV_FAB1;
 	case SUBSYSTEM_ID_VV_FAB2:

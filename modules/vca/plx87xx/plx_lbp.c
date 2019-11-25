@@ -36,6 +36,20 @@
 
 #include "../pxe/vcapxe_register.h"
 
+/* exclude first argument */
+#define FIRST_ARG(first, ...) first
+
+#define dev_err_once_dbg_later(...) \
+	do { \
+	static bool err_print = true; \
+	if (err_print) { \
+		err_print = false; \
+		dev_err(__VA_ARGS__); \
+		dev_err( FIRST_ARG(__VA_ARGS__), "[%s:%d Next occurrences will be logged at debug level]\n", __func__, __LINE__); \
+	}  else { \
+		dev_dbg(__VA_ARGS__); \
+	} } while (0)
+
 #define PLX_LBP_i7_IRQ_TIMEOUT_MS 1000
 #define PLX_LBP_i7_ALLOC_TIMEOUT_MS 1000
 #define PLX_LBP_i7_CMD_TIMEOUT_MS 100
@@ -430,7 +444,7 @@ static int vca_lbp_sync_dma(struct plx_device *xdev, dma_addr_t dst,
 	}
 error:
 	if (err)
-		dev_err(&xdev->pdev->dev, "%s %d err %d\n",
+		dev_err_once_dbg_later(&xdev->pdev->dev, "%s %d err %d\n",
 			__func__, __LINE__, err);
 	return err;
 }
@@ -568,6 +582,8 @@ static enum vca_lbp_retval plx_lbp_send_ramdisk(struct plx_device *xdev,
 			remapped, chunk_dst, ramdisk_ph, offset, temp_buff, chunk_size);
 
 		/* Copy chunk of the image from intermediate buffer to ramdisk */
+		err = -1;
+
 		if (xdev->dma_ch
 #ifdef FORCE_USE_MEMCPY
 				&& 0
@@ -576,7 +592,8 @@ static enum vca_lbp_retval plx_lbp_send_ramdisk(struct plx_device *xdev,
 			/* DMA path*/
 			dev_dbg(&xdev->pdev->dev, "%s: Copy chunk by DMA \n", __func__);
 			err = vca_lbp_sync_dma(xdev, chunk_dst, temp_buff_da, chunk_size);
-		} else {
+		}
+		if (err) {
 			/* MEMCPY path*/
 			dev_dbg(&xdev->pdev->dev, "%s: Copy chunk by MEMCPY \n", __func__);
 			memcpy_toio(remapped, temp_buff, chunk_size);
@@ -1191,6 +1208,8 @@ enum vca_lbp_states plx_lbp_get_state(struct plx_device *xdev)
 	// BIOS changes. It should be fixed in the future
 	case PLX_LBP_i7_POWERING_DOWN | PLX_LBP_i7_NET_DEV_DOWN:
 		return VCA_POWERING_DOWN;
+	case PLX_LBP_i7_BOOTING_PXE:
+		return VCA_BOOTING_PXE;
 	default:
 		if (status & PLX_LBP_i7_POWER_DOWN) {
 			dev_dbg(&xdev->pdev->dev, "%s: detected state '%s', spad value - %d \n",
@@ -1288,6 +1307,9 @@ enum vca_lbp_retval plx_lbp_set_state(struct plx_device *xdev, enum vca_lbp_stat
 		break;
 	case VCA_POWERING_DOWN:
 		i7_state.ready = PLX_LBP_i7_POWERING_DOWN;
+		break;
+	case VCA_BOOTING_PXE:
+		i7_state.ready = PLX_LBP_i7_BOOTING_PXE;
 		break;
 	default:
 		return LBP_BAD_PARAMETER_VALUE;
@@ -1686,7 +1708,6 @@ int plx_lbp_copy_bios_info(struct plx_device *xdev, enum PLX_LBP_PARAM param, u6
 	 ((u32*)dest)[0] = plx_read_spad(xdev, PLX_LBP_SPAD_DATA_LOW);
 	 ((u32*)dest)[1] = (PLX_LBP_PARAM_CPU_MAX_FREQ_NON_TURBO != param) ? plx_read_spad(xdev, PLX_LBP_SPAD_DATA_HIGH) : 0;
 
-#pragma message "Need to remove this in future"
 	 if ((PLX_LBP_PARAM_CPU_MAX_FREQ_NON_TURBO == param) && (PLX_LBP_PROTOCOL_VERSION_0_2 >= i7_ready.version)) {
 		 /* in case when input value is equal to 0, which should start turbo,
 		 but for protocol version 2 turbo is being enabled on 17, so if 17

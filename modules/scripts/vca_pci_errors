@@ -1,4 +1,7 @@
-#!/bin/bash -e
+#!/bin/bash
+
+set -e
+
 trap 'e=$? ; echo -e "Error ${e}\t${BASH_COMMAND}" >&2 ; exit ${e}' ERR
 for vca in /sys/kernel/debug/plx87xx/*/dump_regs_complete; do
 	grep -e '\[0x3[cdef]fac\]' -e '\[0x3[cdef]fb0\]' ${vca} \

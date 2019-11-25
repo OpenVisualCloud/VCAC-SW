@@ -101,6 +101,8 @@ function gen_centos {
 					_GRUB_CFG="${SCRIPT_DIR}"/grub_cfgs/grub_kvm.cfg
 					_KS_FILE="${SCRIPT_DIR}"/ks_files/vv_production_kvm.ks
 					_EXTRAS="-e ${VCA_EXTRAS_REPO}"
+					_ARCHIVES="${_ARCHIVES} --archive amd_passthru.tar"
+					prepare_amd_passthru_archive
 				;;
 				XEN)
 					_IMAGE_TYPE=volatile-dom0
@@ -335,6 +337,21 @@ function prepare_qemu_archive () {
 	rm -rf "${_VIRT_ARCHIVE}"
 }
 
+function prepare_amd_passthru_archive() {
+	local _ARCHIVE_NAME="amd_passthru.tar"
+	local _VIRTUAL_ARCHIVE_DIR; _VIRTUAL_ARCHIVE_DIR="$(mktemp --directory --tmpdir archive.XXX)" || die "Could not create directory for virtual archive"
+	build_virtual_archive "${_VIRTUAL_ARCHIVE_DIR}"	\
+		"" 											\
+		"" 											\
+		"" 											\
+		"" 											\
+		"" 											\
+		"${SCRIPT_DIR}"/archive_scripts/kvm/amd_passthru_postadd.sh
+	create_info_file "${_VIRTUAL_ARCHIVE_DIR}" "${OS}" "${DIST}"  "${KER_VER}" "$(hostname):$0, pwd=$(pwd)" ""
+	assemble_archive "${_VIRTUAL_ARCHIVE_DIR}" "${_ARCHIVE_NAME}" || die "Could not create archive ${_ARCHIVE_NAME} from ${_VIRTUAL_ARCHIVE_DIR}"
+	destroy_virtual_archive "${_VIRTUAL_ARCHIVE_DIR}"
+}
+
 # input:
 #	"${ARTIFACTS_DIR}/*.deb"
 # output: regular archive with VCA: packages + custom dir + postadd script
@@ -538,9 +555,9 @@ generate_images(){
 					echo -e "no MSS images selected\n"
 				;;
 				STD)
-					#~ gen_ubuntu VLTL BRM
-					#~ gen_ubuntu PRST BRM
-					#~ gen_ubuntu VLTL BRM OFF
+					gen_ubuntu VLTL BRM
+					gen_ubuntu PRST BRM
+					gen_ubuntu VLTL BRM OFF
 					gen_ubuntu PRST BRM OFF
 				;;
 				*)

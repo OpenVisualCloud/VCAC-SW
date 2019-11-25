@@ -20,6 +20,7 @@
 
 #include "helper_funcs.h"
 
+#include <sys/file.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,6 +33,7 @@
 #include <string.h>
 
 #include <boost/thread/thread.hpp>
+#include <boost/interprocess/sync/file_lock.hpp>
 
 #include <vca_mgr_ioctl.h>
 #include <vca_mgr_extd_ioctl.h>
@@ -197,64 +199,6 @@ public:
 	}
 };
 
-class file_manager {
-public:
-	struct managed_file {
-		char* content;
-		size_t size;
-		managed_file(char * content, size_t size): content(content), size(size){}
-		~managed_file() { delete[] content; }
-	private:
-		managed_file(const managed_file&);
-		managed_file & operator=(const managed_file&);
-	};
-private:
-	struct cmp_string {
-	public:
-		bool operator()(const char* lhs, const char* rhs) const {
-				return strcmp(lhs, rhs) < 0;
-		   }
-	};
-	typedef std::map<const char*, managed_file*, cmp_string> file_map;
-	file_map files;
-	boost::mutex files_lock_mtx;
-
-public:
-	file_manager() {}
-	managed_file *get_file_content(const char* filename) {
-		boost::lock_guard<boost::mutex> guard(files_lock_mtx);
-
-		file_map::iterator it = files.find(filename);
-		if(it != files.end())
-			return it->second;
-
-		close_on_exit fd(open_path(filename, O_RDONLY));
-		if (!fd) {
-			LOG_WARN("%s open %s\n", strerror(errno), filename);
-			return NULL;
-		}
-
-		size_t f_sz = get_file_size(filename);
-		char *buffer = new char[f_sz];
-		if (read(fd, buffer, f_sz) < 0) {
-			LOG_ERROR("could not read from %s\n", filename);
-			delete[] buffer;
-			return NULL;
-		}
-
-		managed_file * f = new managed_file(buffer, f_sz);
-		files.insert(std::pair<const char*, managed_file*>(filename, f));
-		return f;
-	}
-	~file_manager() {
-		for(file_map::iterator it = files.begin(); it != files.end();) {
-			delete it->second;
-			files.erase(it++);
-		}
-	}
-};
-
-file_manager file_mgr;
 vca_config config(VCA_CONFIG_PATH);
 
 bool load_vca_config()
@@ -511,20 +455,19 @@ std::string get_card_gen(const unsigned card_id);
 
 struct cmd_desc {
 	const char * name;
-	const char * desc;
 	function_caller * caller;
 	arg_parser args[6];
 	subcmds *subcmd;
 	size_t args_size;
 
-	cmd_desc(const char* name, const char* desc, function_caller * caller,
+	cmd_desc(const char* name, function_caller * caller,
 		arg_parser arg0 = NULL,
 		arg_parser arg1 = NULL,
 		arg_parser arg2 = NULL,
 		arg_parser arg3 = NULL,
 		arg_parser arg4 = NULL,
 		arg_parser arg5 = NULL) :
-		name(name), desc(desc), caller(caller), subcmd(NULL), args_size(0) {
+		name(name), caller(caller), subcmd(NULL), args_size(0) {
 		if (arg0)
 			args[args_size++] = arg0;
 		else return;
@@ -543,14 +486,14 @@ struct cmd_desc {
 		if (arg5)
 			args[args_size++] = arg5;
 	}
-	cmd_desc(const char* name, const char* desc, function_caller * caller, subcmds *sub,
+	cmd_desc(const char* name, function_caller * caller, subcmds *sub,
 		arg_parser arg0 = NULL,
 		arg_parser arg1 = NULL,
 		arg_parser arg2 = NULL,
 		arg_parser arg3 = NULL,
 		arg_parser arg4 = NULL,
 		arg_parser arg5 = NULL) :
-		name(name), desc(desc), caller(caller), subcmd(sub), args_size(0) {
+		name(name), caller(caller), subcmd(sub), args_size(0) {
 		if (arg0)
 			args[args_size++] = arg0;
 		else return;
@@ -573,24 +516,24 @@ struct cmd_desc {
 		for (const arg_parser* parser = args, *const end = args + args_size; parser < end; ++parser)
 			switch((*parser)(*argv, holder)) {
 			case PARSING_FAILED:
-				LOG_DEBUG("%s\tPARSING_FAILED by %p\n", (*argv)?:"", parser);
+				LOG_FULL("%s\tPARSING_FAILED by %p\n", (*argv)?:"", parser);
 				return false;
 			case PARSED:
-				LOG_DEBUG("%s\tPARSED by %p\n", (*argv)?:"", parser);
+				LOG_FULL("%s\tPARSED by %p\n", (*argv)?:"", parser);
 				if (*argv) ++argv; // Stay in NULL, because probably can be next parser with optional values
 				continue;
 			case NOT_PARSED:
-				LOG_DEBUG("%s\tNOT_PARSED by %p\n", (*argv)?:"", parser);
+				LOG_FULL("%s\tNOT_PARSED by %p\n", (*argv)?:"", parser);
 				continue;
 			case PARSED_AND_CONTINUE:
-				LOG_DEBUG("%s\tPARSED by %p (greedy)\n", (*argv)?:"", parser);
+				LOG_FULL("%s\tPARSED by %p (greedy)\n", (*argv)?:"", parser);
 				if (*(argv+1))
 					--parser; // Decrement parser, so it will be called again in next loop iteration
 				++argv;
 				continue;
 			}
 		if (!*argv) {
-			LOG_DEBUG("Parsed\n");
+			LOG_FULL("Parsed\n");
 			return true;
 		}
 		LOG_ERROR("Unrecognized parameter %s\n", *argv);
@@ -655,56 +598,11 @@ std::string read_cpu_sysfs(const caller_data & d, const char *entry)
 	return ret;
 }
 
-const char *get_vca_ioctl_name(unsigned long ioctl_cmd)
-{
-	switch(ioctl_cmd) {
-	case VCA_READ_CARD_TYPE:
-		return "VCA_READ_CARD_TYPE";
-	case VCA_READ_CPU_NUM:
-		return "VCA_READ_CPU_NUM";
-	case VCA_RESET:
-		return "VCA_RESET";
-	case VCA_POWER_BUTTON:
-		return "VCA_POWER_BUTTON";
-	case VCA_SET_SMB_ID:
-		return "VCA_SET_SMB_ID";
-	case VCA_UPDATE_EEPROM:
-		return "VCA_UPDATE_EEPROM";
-	case VCA_UPDATE_SECONDARY_EEPROM:
-		return "VCA_UPDATE_SECONDARY_EEPROM";
-	case VCA_READ_MODULES_BUILD:
-		return "VCA_READ_MODULES_BUILD";
-	case VCA_READ_BOARD_ID:
-		return "VCA_READ_BOARD_ID";
-	case VCA_READ_EEPROM_CRC:
-		return "VCA_READ_EEPROM_CRC";
-	case VCA_ENABLE_GOLD_BIOS:
-		return "VCA_ENABLE_GOLD_BIOS";
-	case VCA_DISABLE_GOLD_BIOS:
-		return "VCA_DISABLE_GOLD_BIOS";
-	case VCA_CHECK_POWER_BUTTON:
-		return "VCA_CHECK_POWER_BUTTON";
-	default:
-		LOG_DEBUG("vca ioctl command name for %lx not found!\n", ioctl_cmd);
-		return "";
-	};
-}
-
 inline bool check_plx_eep_state_ok(plx_eep_retval state, unsigned long ioctl_cmd)
 {
 	if (state != PLX_EEP_STATUS_OK) {
 		LOG_ERROR("EEP %s returned with %s\n",
 			get_vca_ioctl_name(ioctl_cmd), get_plx_eep_retval_str(state));
-		return false;
-	}
-	return true;
-}
-
-bool vca_ioctl(filehandle_t fd, unsigned long ioctl_cmd, void *arg)
-{
-	int rc = ioctl(fd, ioctl_cmd, arg);
-	if (rc != SUCCESS) {
-		LOG_ERROR("%s failed: %s!\n", get_vca_ioctl_name(ioctl_cmd), strerror(errno));
 		return false;
 	}
 	return true;
@@ -757,17 +655,6 @@ int vca_plx_eep_ioctl_with_bin_mgr_extd(filehandle_t fd, char *img, size_t bin_s
 	return ret;
 }
 
-extern "C" enum vca_card_type get_card_type(int card_id)
-{
-	close_on_exit card_fd(open_card_fd(card_id));
-	if (!card_fd)
-		return VCA_UNKNOWN;
-	vca_card_type type;
-	if (!vca_ioctl(card_fd, VCA_READ_CARD_TYPE, &type))
-		return VCA_UNKNOWN;
-	return type;
-}
-
 static int get_last_cpu(unsigned card)
 {
 	if(close_on_exit card_fd= open_card_fd( card)){
@@ -782,17 +669,21 @@ std::string get_modules_version(int card_id)
 {
 	close_on_exit card_fd(open_card_fd(card_id));
 	if (!card_fd)
-		return "Build unknown";
-	char build_info[SMALL_OUTPUT_SIZE] = {0};
-	if (!vca_ioctl(card_fd, VCA_READ_MODULES_BUILD, &build_info))
-		return "Build unknown";
-	if (0 != build_info[SMALL_OUTPUT_SIZE - 1]) {
-		LOG_WARN("Too small 'build_info' buffer size in get_modules_version(). "
-				"SMALL_OUTPUT_SIZE = %d is not enough!\n", SMALL_OUTPUT_SIZE);
-		build_info[SMALL_OUTPUT_SIZE - 1] = 0;
-	}
-	return build_info;
+		return "Build unknown (err: open)";
+	vca_ioctl_buffer build_info;
+	if (!vca_ioctl(card_fd, VCA_READ_MODULES_BUILD, build_info.buf))
+		return "Build unknown (err: ioctl)";
+	build_info.buf[sizeof(build_info.buf) - 1] = 0;
+	return build_info.buf;
 }
+
+std::string get_kernel_version()
+{
+	char buf[256];
+	run_cmd_with_output("uname -r", buf, sizeof(buf));
+	return buf;
+}
+
 int get_board_id(int card_id)
 {
 	close_on_exit fd_extd(open_extd_card_fd(card_id));
@@ -845,8 +736,8 @@ const char* get_csm_ioctl_name(unsigned long ioctl_cmd)
 		return "VCA_READ_EEPROM_CRC";
 	case LBP_BOOT_BLKDISK:
 		return "LBP_BOOT_LBPDISK";
-	case VCA_GET_MEM_SIZE:
-		return "VCA_GET_MEM_SIZE";
+	case VCA_GET_MEM_INFO:
+		return "VCA_GET_MEM_INFO";
 	case LBP_BOOT_VIA_PXE:
 		return "LBP_BOOT_VIA_PXE";
 	default:
@@ -1146,13 +1037,14 @@ bool reset(caller_data d)
 	close_on_exit fd(open_card_fd(d.card_id));
 	if (!fd)
 		return false;
-
 	close_on_exit cpu_fd(open_cpu_fd(d.card_id, d.cpu_id));
 	if (!cpu_fd)
 		return false;
-
+	if( flock( cpu_fd, LOCK_EX|LOCK_NB)) { // unlocking by close file descriptor
+		d.LOG_CPU_ERROR("Node is locked. Use `lslocks` to see what process holds the lock.\n");
+		return false;
+	}
 	stop_csm(cpu_fd, d);
-
 	return vca_ioctl(fd, VCA_RESET, &desc);
 }
 
@@ -1365,7 +1257,10 @@ bool hold_power_button(caller_data d)
 	close_on_exit cpu_fd(open_cpu_fd(d.card_id, d.cpu_id));
 	if (!cpu_fd)
 		return false;
-
+	if( flock( cpu_fd, LOCK_EX|LOCK_NB)) { // unlocking by close file descriptor
+		d.LOG_CPU_ERROR("Node is locked. Use `lslocks` to see what process holds the lock.\n");
+		return false;
+	}
 	stop_csm(cpu_fd, d);
 	return press_power_button(d, true);
 }
@@ -1480,7 +1375,7 @@ bool csm_ioctl_with_img(filehandle_t cpu_fd, unsigned long ioctl_cmd, const call
 	d.LOG_CPU(DEBUG_INFO, "%s\n", get_csm_ioctl_name(ioctl_cmd));
 	vca_csm_ioctl_mem_desc desc;
 	desc.mem = img;
-	desc.mem_size = img_size;
+	desc.mem_info = img_size;
 	if(!csm_ioctl(cpu_fd, ioctl_cmd, &desc))
 		return false;
 
@@ -1793,14 +1688,22 @@ static bool make_sys_config(const caller_data& d){
 		std::string sys_cfg_cmd= "#!/bin/bash\ntrap 'echo -e \"Error ${BASH_COMMAND}\" >&2' ERR\n";
 		if(const char* script_path = get_cpu_field_if_not_empty(d, cpu_fields::script_path, true)) {
 			if(close_on_exit fd= open_path( script_path, O_RDONLY)) {
-				struct stat info; fstat( fd, &info);
-				if(char const* const b=(char*) mmap( 0, info.st_size, PROT_READ, MAP_SHARED, fd, 0)) {
-					sys_cfg_cmd.append( b, info.st_size);
-					munmap((void*) b, info.st_size);
+				struct stat info;
+				if (fstat(fd, &info)) {
+					d.LOG_CPU_ERROR("fstat %s: %s\n", strerror(errno), path.c_str());
+					return false;
 				}
-				else d.LOG_CPU_WARN("mmap %s\n", path.c_str());;
+				const char *b;
+				if ((b = (char*) mmap(0, info.st_size, PROT_READ, MAP_SHARED, fd, 0)) == MAP_FAILED) {
+					d.LOG_CPU_ERROR("mmap: %s: %s\n", strerror(errno), path.c_str());
+					return false;
+				}
+				sys_cfg_cmd.append(b, info.st_size);
+				munmap((void*) b, info.st_size);
+			} else {
+				d.LOG_CPU_ERROR("open %s\n", path.c_str());
+				return false;
 			}
-			else d.LOG_CPU_WARN("open %s\n", path.c_str());;
 		}
 		if(const char *va_free_mem_enable = get_cpu_field_if_not_empty(d, cpu_fields::va_free_mem))
 			if( !strcmp( va_free_mem_enable, "1"))
@@ -1893,6 +1796,68 @@ void check_rcvy_jumper_state(caller_data d)
 	if (state == VCA_JUMPER_OPEN)
 		d.LOG_CPU(VERBOSE_DEFAULT, "Warning: Jumper selects GOLD BIOS. Next reboot will boot it.\n");
 }
+
+
+static bool is_agent_ready(const caller_data &d) {
+    const std::string state = get_cpu_state(d);
+    return
+           state == VCA_OS_READY_TEXT
+        || state == VCA_NET_DEV_READY_TEXT
+        || state == VCA_DHCP_ERROR_TEXT
+        || state == VCA_NET_DEV_NO_IP_TEXT
+        || state == VCA_DHCP_IN_PROGRESS_TEXT
+        || state == VCA_DHCP_DONE_TEXT
+        || state == VCA_NET_DEV_DOWN_TEXT;
+}
+
+
+static bool vca_agent_command(caller_data& d, std::string &output, vca_agent_cmd cmd)
+{
+    close_on_exit cpu_fd(open_cpu_fd(d.card_id, d.cpu_id));
+    if (!cpu_fd)
+        return false;
+    if( flock( cpu_fd.fd, LOCK_EX|LOCK_NB)) { // unlocking by close file descriptor
+        d.LOG_CPU_ERROR("Node is locked. Check `lslocks`.\n");
+        return false;
+    }
+    if (!is_agent_ready(d)) {
+        d.LOG_CPU_ERROR("Card needs to be in \"%s\", \"%s\", \"%s\", \"%s\", \"%s\" or \"%s\" state!\n",
+                VCA_OS_READY_TEXT,
+                VCA_NET_DEV_READY_TEXT,
+                VCA_DHCP_ERROR_TEXT,
+                VCA_NET_DEV_NO_IP_TEXT,
+                VCA_DHCP_IN_PROGRESS_TEXT,
+                VCA_DHCP_DONE_TEXT,
+                VCA_NET_DEV_DOWN_TEXT);
+        return false;
+    }
+    if(vca_csm_ioctl_agent_cmd*const data = (vca_csm_ioctl_agent_cmd *)calloc( 1, sizeof(*data) + PAGE_SIZE)) {
+        do {
+            *(char *)data->buf = cmd;
+            data->buf_size = PAGE_SIZE;
+            if(!csm_ioctl(cpu_fd, VCA_AGENT_COMMAND, data))
+                break;
+            if (!check_lbp_state_ok(data->ret, VCA_AGENT_COMMAND, d))
+                break;
+            if(data->buf_size >= PAGE_SIZE) {
+                d.LOG_CPU_ERROR("IOCTL returned with corrupted values!\n");
+                break;
+            }
+            if (data->buf_size) {
+                if(data->buf[data->buf_size-1] == '\n')
+                    data->buf[data->buf_size-1] = '\0';
+            }
+            // construct std::string from char* informing explicitely about length (KW issue)
+            output.assign(data->buf, std::find(data->buf, data->buf + PAGE_SIZE - 1 , '\0'));
+            free(data);
+            return true; // success
+        } while(false);
+        free(data);
+    }
+    return false;
+
+}
+
 
 static const char* update_status_with_bios_flags(caller_data d)
 {
@@ -2187,6 +2152,10 @@ bool boot(caller_data d)
 	close_on_exit cpu_fd(open_cpu_fd(d.card_id, d.cpu_id));
 	if (!cpu_fd)
 		return false;
+	if( flock( cpu_fd, LOCK_EX|LOCK_NB)) { // unlocking by close file descriptor
+		d.LOG_CPU_ERROR("Node is locked. Use `lslocks` to see what process holds the lock.\n");
+		return false;
+	}
 	#ifdef SGX
 	unsigned long long current_state;
 	std::string fix_command;
@@ -2247,8 +2216,9 @@ bool boot(caller_data d)
 		return false;
 
 	char boot_path[PATH_MAX + 1];
-	file_manager::managed_file *file_lbp = NULL;
 	bool boot_pxe = false;
+	struct stat info;
+	char const*file_lbp = NULL;
 
 	if (!strcmp(relative_path, BLOCKIO_BOOT_DEV_NAME)) {
 		d.LOG_CPU(DEBUG_INFO, "BOOT BLOCK DEVICE!\n");
@@ -2265,8 +2235,13 @@ bool boot(caller_data d)
 		}
 
 		d.LOG_CPU(DEBUG_INFO, "Loading file %s\n", boot_path);
-		file_lbp = file_mgr.get_file_content(boot_path);
-		if (!file_lbp) {
+		close_on_exit fd(open_path(boot_path, O_RDONLY));
+		if (fstat(fd, &info)) {
+			d.LOG_CPU_ERROR("fstat: %s: %s\n", strerror(errno), boot_path);
+			return false;
+		}
+		file_lbp = (char*)mmap(0, info.st_size, PROT_READ, MAP_SHARED, fd, 0);
+		if (file_lbp == MAP_FAILED) {
 			d.LOG_CPU_ERROR("Could not open file: %s\n", boot_path);
 			return false;
 		}
@@ -2366,7 +2341,8 @@ bool boot(caller_data d)
 			}
 		} else {
 			d.LOG_CPU(DEBUG_INFO, "TRYING TO BOOT LBP!\n");
-			boot_res = try_ioctl_with_img(cpu_fd, LBP_BOOT_RAMDISK, d, (void*)file_lbp->content, file_lbp->size);
+			boot_res = try_ioctl_with_img(cpu_fd, LBP_BOOT_RAMDISK, d, (void*)file_lbp, info.st_size);
+			munmap((void*)file_lbp, info.st_size);
 		}
 
 		if (boot_res) {
@@ -2621,9 +2597,14 @@ bool update_bios(caller_data d)
 		return false;
 
 	const char *file_path = file_path_f->get_cstring();
-
-	file_manager::managed_file *file = file_mgr.get_file_content(file_path);
-	if (!file) {
+	close_on_exit fd(open_path(file_path, O_RDONLY));
+	struct stat info;
+	if (fstat(fd, &info)) {
+		d.LOG_CPU_ERROR("fstat: %s: %s\n", strerror(errno), file_path);
+		return false;
+	}
+	char *file = (char*)mmap(0, info.st_size, PROT_READ, MAP_SHARED, fd, 0);
+	if (file == MAP_FAILED) {
 		d.LOG_CPU_ERROR("Could not open file: %s\n", file_path);
 		return false;
 	}
@@ -2650,8 +2631,9 @@ bool update_bios(caller_data d)
 
 	if (type & VCA_PRODUCTION) {
 		/* reset needed until bios will support unmapping file! */
-		if (try_ioctl_with_img(cpu_fd, LBP_FLASH_BIOS, d, (void*)file->content, file->size)) {
+		if (try_ioctl_with_img(cpu_fd, LBP_FLASH_BIOS, d, (void*)file, info.st_size)) {
 			d.LOG_CPU(VERBOSE_DEFAULT, "UPDATE BIOS SUCCESSFUL\n");
+			munmap((void*)file, info.st_size);
 			if ((cmd_name == RECOVER_BIOS_CMD)) {
 				if (!restore_cpu_after_bios_update(d))
 					return false;
@@ -2873,20 +2855,18 @@ bool set_serial_number(caller_data d)
 		if (!fd)
 			return false;
 		struct stat fstat_buffer;
-		fstat(fd, &fstat_buffer);
-		if (fstat_buffer.st_size > IMG_MAX_SIZE)
-			return false;
-		char *buffer = new char[fstat_buffer.st_size];
-		if (buffer == NULL)
-			return false;
-		if (read(fd, buffer, fstat_buffer.st_size) != fstat_buffer.st_size) {
-			d.LOG_CPU_ERROR("could not read from %s\n", VCA_SET_SERIAL_NR_IMG_PATH);
-			delete[] buffer;
+		if (fstat(fd, &fstat_buffer)) {
+			d.LOG_CPU_ERROR("fstat: %s: %s\n", strerror(errno), VCA_SET_SERIAL_NR_IMG_PATH);
 			return false;
 		}
+		if (fstat_buffer.st_size > IMG_MAX_SIZE)
+			return false;
+		void *buffer = mmap(0, fstat_buffer.st_size, PROT_READ, MAP_SHARED, fd, 0);
+		if (buffer == MAP_FAILED)
+			return false;
 		/* reset needed until bios will support unmapping file! */
-		bool ioctl_ok = try_ioctl_with_img(cpu_fd, LBP_SET_SERIAL_NR, d, (void*)buffer, fstat_buffer.st_size);
-		delete[] buffer;
+		bool ioctl_ok = try_ioctl_with_img(cpu_fd, LBP_SET_SERIAL_NR, d, buffer, fstat_buffer.st_size);
+		munmap(buffer, fstat_buffer.st_size);
 		if (ioctl_ok) {
 			d.LOG_CPU(DEBUG_INFO, "SETTING SERIAL NR SUCCESSFUL!\n");
 			reset(d);
@@ -3356,61 +3336,6 @@ bool config_default(caller_data d)
 	return config.save_default_config();
 }
 
-static bool is_agent_ready(const caller_data &d) {
-	const std::string state = get_cpu_state(d);
-	return
-		   state == VCA_OS_READY_TEXT
-		|| state == VCA_NET_DEV_READY_TEXT
-		|| state == VCA_DHCP_ERROR_TEXT
-		|| state == VCA_NET_DEV_NO_IP_TEXT
-		|| state == VCA_DHCP_IN_PROGRESS_TEXT
-		|| state == VCA_DHCP_DONE_TEXT
-		|| state == VCA_NET_DEV_DOWN_TEXT;
-}
-
-static bool vca_agent_command(caller_data& d, std::string &output, vca_agent_cmd cmd)
-{
-	close_on_exit cpu_fd(open_cpu_fd(d.card_id, d.cpu_id));
-	if (!cpu_fd)
-		return false;
-	if (!is_agent_ready(d)) {
-		d.LOG_CPU_ERROR("Card needs to be in \"%s\", \"%s\", \"%s\", \"%s\", \"%s\" or \"%s\" state!\n",
-				VCA_OS_READY_TEXT,
-				VCA_NET_DEV_READY_TEXT,
-				VCA_DHCP_ERROR_TEXT,
-				VCA_NET_DEV_NO_IP_TEXT,
-				VCA_DHCP_IN_PROGRESS_TEXT,
-				VCA_DHCP_DONE_TEXT,
-				VCA_NET_DEV_DOWN_TEXT);
-		return false;
-	}
-	if(vca_csm_ioctl_agent_cmd*const data = (vca_csm_ioctl_agent_cmd *)calloc( 1, sizeof(*data) + PAGE_SIZE)) {
-		do {
-			*(char *)data->buf = cmd;
-			data->buf_size = PAGE_SIZE;
-			if(!csm_ioctl(cpu_fd, VCA_AGENT_COMMAND, data))
-				break;
-			if (!check_lbp_state_ok(data->ret, VCA_AGENT_COMMAND, d))
-				break;
-			if(data->buf_size >= PAGE_SIZE) {
-				d.LOG_CPU_ERROR("IOCTL returned with corrupted values!\n");
-				break;
-			}
-			if (data->buf_size) {
-				if(data->buf[data->buf_size-1] == '\n')
-					data->buf[data->buf_size-1] = '\0';
-			}
-			// construct std::string from char* informing explicitely about length (KW issue)
-			output.assign(data->buf, std::find(data->buf, data->buf + PAGE_SIZE - 1 , '\0'));
-			free(data);
-			return true; // success
-		} while(false);
-		free(data);
-	}
-	return false;
-
-}
-
 bool read_temp(caller_data d)
 {
     bool ret;
@@ -3657,8 +3582,7 @@ static bool print_hw_info(caller_data callerData)
 		}
 	case VCA_MV_FAB1: // double eeprom
 	case VCA_VV_FAB2:
-	case VCA_VV_FAB1:
-	case VCA_POC: {
+	case VCA_VV_FAB1: {
 		Eeprom2 version(callerData.card_id);
 		printf("Card %d:\t%s,\tEEPROM version: %s (CRC1:%08x CRC2:%08x),\tSerial Number: %s\n",
 			callerData.card_id,
@@ -3680,10 +3604,13 @@ static bool print_system_info(caller_data callerData)
 #ifdef SGX
 	sgx_support = ", SGX support compiled-in";
 #endif
-	printf("Apps version: %s%s\n", BUILD_VERSION, sgx_support);
+	printf("Apps build: %s%s\n", BUILD_VERSION, sgx_support);
 
 	std::string modulesVersion = get_modules_version(0);
 	printf("Modules build: %s\n", modulesVersion.c_str());
+
+	std::string kernelVersion = get_kernel_version();
+	printf("Kernel version: %s\n", kernelVersion.c_str());
 
 	return true;
 }
@@ -3794,19 +3721,12 @@ std::string get_bios_version(caller_data d, close_on_exit& cpu_fd)
 	return BIOS_VERSION_ERROR;
 }
 
-static std::string get_memsize(caller_data d, close_on_exit& cpu_fd)
-{
-	int ret;
-	if (!csm_ioctl(cpu_fd, VCA_GET_MEM_SIZE, &ret))
+static std::string get_mem_size(caller_data d) {
+	int size;
+	close_on_exit cpu_fd(open_cpu_fd(d.card_id, d.cpu_id));
+	if (!cpu_fd || !csm_ioctl(cpu_fd, VCA_GET_MEM_INFO, &size) || !size)
 		return "unknown";
-
-	if (ret) {
-		return int_to_string(ret);
-	}
-	else {
-		d.LOG_CPU_ERROR("Cannot read memory size\n");
-		return "unknown";
-	}
+	return int_to_string(size);
 }
 
 bool print_node_bios_version_info(caller_data d, close_on_exit& cpu_fd)
@@ -3853,20 +3773,25 @@ static bool print_node_bios_info(caller_data d)
 	return false;
 }
 
-static bool print_node_memsize(caller_data d)
-{
-	if (d.args.size() < 3)
-		printf("Card %d Cpu %d:\n", d.card_id, d.cpu_id);
-	close_on_exit cpu_fd(open_cpu_fd(d.card_id, d.cpu_id));
-	if (cpu_fd) {
-		if (get_cpu_state(d) == VCA_BIOS_UP_TEXT)
-			if (!try_handshake(cpu_fd, d))
-				return false;
-		printf("%s\n", get_memsize(d, cpu_fd).c_str());
+static bool print_node_meminfo(caller_data d) {
+	if (d.caller_id == 0)
+		printf(" Card   Cpu  Size(MB) SN(Slot 0) SN(Slot 1)\n");
 
-		return true;
+	std::string sn;
+	bool ret = vca_agent_command(d, sn, VCA_AGENT_MEM_INFO);
+	if (!ret) {
+		d.LOG_CPU_ERROR("Couldn't read node' memory serial number: %s\n", sn.c_str());
+		return false;
 	}
-	return false;
+
+	char sn1[16] = "-", sn2[16] = "-";
+	sscanf(sn.c_str(),
+		" Serial Number: %15[^\n]"
+		" Serial Number: %15[^\n]",
+		sn1, sn2);
+	printf("%5d %5d %9s %10s %10s\n",
+		d.card_id, d.cpu_id, get_mem_size(d).c_str(), sn1, sn2);
+	return true;
 }
 
 bool print_info_cmd_data(caller_data d)
@@ -3881,8 +3806,8 @@ bool print_info_cmd_data(caller_data d)
 		return print_node_os_info(d);
 	else if (subcmd == INFO_SUBCMD_NODE_BIOS)
 		return print_node_bios_info(d);
-	else if (subcmd == INFO_SUBCMD_NODE_MEMSIZE)
-		return print_node_memsize(d);
+	else if (subcmd == INFO_SUBCMD_NODE_MEMINFO)
+		return print_node_meminfo(d);
 	else if (subcmd == INFO_SUBCMD_CPU_UUID)
 		return print_node_uuid(d);
 	else if (subcmd == INFO_SUBCMD_NODE_STATS)
@@ -4965,7 +4890,7 @@ std::vector<std::string> get_subcmd_list(const char *_cmd)
 		subcommand_list.push_back(INFO_SUBCMD_SYSTEM);
 		subcommand_list.push_back(INFO_SUBCMD_NODE_OS);
 		subcommand_list.push_back(INFO_SUBCMD_NODE_BIOS);
-		subcommand_list.push_back(INFO_SUBCMD_NODE_MEMSIZE);
+		subcommand_list.push_back(INFO_SUBCMD_NODE_MEMINFO);
 		subcommand_list.push_back(INFO_SUBCMD_CPU_UUID);
 		subcommand_list.push_back(INFO_SUBCMD_NODE_STATS);
 	}
@@ -5025,7 +4950,7 @@ static inline subcmds *get_subcmds(const char *_cmd, const std::vector<std::stri
 		subcmd->add_subcmd(INFO_SUBCMD_SYSTEM,			"print system information");
 		subcmd->add_subcmd(INFO_SUBCMD_NODE_OS,			"print OS booted on cpu");
 		subcmd->add_subcmd(INFO_SUBCMD_NODE_BIOS,		"print BIOS version on cpu");
-		subcmd->add_subcmd(INFO_SUBCMD_NODE_MEMSIZE,	"print node memory size");
+		subcmd->add_subcmd(INFO_SUBCMD_NODE_MEMINFO,    "print node memory size and memory SN");
 		subcmd->add_subcmd(INFO_SUBCMD_CPU_UUID,		"print cpu uuid");
 		subcmd->add_subcmd(INFO_SUBCMD_NODE_STATS,		"print node stats");
 	}
@@ -5525,81 +5450,46 @@ parsing_output requires_bios_cfg_name_and_value_pairs(const char *arg, args_hold
 #endif // VCACTL_PARSING_FUNCTIONS
 
 static cmd_desc const commands_desc[] = {
-	cmd_desc("status", "shows status of the cpu",
-		new sequential_caller(status), optional_card_id, optional_cpu_id),
-	cmd_desc("reset", "resets the cpu",
-		new threaded_caller(_reset), optional_card_id, optional_cpu_id),
-	cmd_desc("wait", "waits for cpu to boot OS",
-		new threaded_caller(wait), optional_card_id, optional_cpu_id),
-	cmd_desc("wait-BIOS", "waits for bios to be ready on desired cpu",
-		new threaded_caller(wait_bios), optional_card_id, optional_cpu_id),
-	cmd_desc("boot", "boot OS for cpu using LBP",
-		new sequential_caller(boot), optional_card_id, optional_cpu_id, optional_file, optional_value_force_get_last_os),
-	cmd_desc("reboot", "reboot last used OS",
-		new threaded_caller(reboot), optional_card_id, optional_cpu_id, optional_file),
-	cmd_desc("update-BIOS", "update bios for the cpu",
-		new threaded_caller(update_bios), optional_card_id, optional_cpu_id, requires_file),
-	cmd_desc("recover-BIOS", "Recover BIOS",
-		new threaded_caller(update_bios), optional_card_id, optional_cpu_id, requires_file),
-	cmd_desc("update-MAC", "updates mac address of the cpu with desired value (only allowed as root)",
-		new sequential_caller(update_mac_addr), requires_card_id, requires_cpu_id, requires_mac_addr),
-	cmd_desc("update-SN", "sets serial number of the card with desired value (only allowed as root)",
-		new sequential_caller(set_serial_number), requires_card_id, requires_serial_number),
-	cmd_desc("update-EEPROM", "update EEPROM for the card",
-		new sequential_caller(update_eeprom), optional_card_id, requires_file),
-	cmd_desc("clear-SMB-event-log", "clear SMB event log for the cpu",
-		new threaded_caller(clear_smb_event_log), optional_card_id, optional_cpu_id),
-	cmd_desc("script", "set script parameter in configuration",
-		new sequential_caller(script), optional_card_id, optional_cpu_id, optional_file),
-	cmd_desc("config-show", "shows config for cpu",
-		new sequential_caller(config_show), optional_card_id, optional_cpu_id, optional_config_param, optional_value_only_param),
-	cmd_desc("config", "set parameter in configuration",
-		new sequential_caller(config_change), optional_card_id, optional_cpu_id, optional_blockio_id, requires_config_param, requires_config_value),
-	cmd_desc("config-use", "restarts ping daemons with new configuration",
-		new sequential_caller(config_use)),
-	cmd_desc("config-default", "restore vca configuration to default values",
-		new sequential_caller(config_default)),
-	cmd_desc("temp", "read temp from cpu node",
-		new sequential_caller(read_temp), optional_card_id, optional_cpu_id),
-	cmd_desc("ICMP-watchdog", "start/stop ICMP watchdog",
-		new threaded_caller(ICMP_watchdog), requires_trigger, optional_card_id, optional_cpu_id, optional_ip),
-	cmd_desc("network", "get network information",
-		new sequential_caller(get_network_info), get_subcmds("network"), requires_subcommand, optional_card_id, optional_cpu_id),
-	cmd_desc("info", "get VCA information",
-		new sequential_caller(print_info_cmd_data), get_subcmds("info"), requires_subcommand, optional_card_id, optional_cpu_id),
-	cmd_desc("info-hw", "get hardware inforamtion",
-		new sequential_caller(print_hw_info), optional_card_id),
-	cmd_desc("info-system", "get general system inforamtion",
-		new sequential_caller(print_system_info)),
-	cmd_desc("pwrbtn-short", "power button toggle",
-		new threaded_caller(toggle_power_button), optional_card_id, optional_cpu_id),
-	cmd_desc("pwrbtn-long", "power button override 5 sec",
-		new threaded_caller(hold_power_button), optional_card_id, optional_cpu_id),
-	cmd_desc("help", "print usage instruction",
-		new sequential_caller(help)),
-	cmd_desc("blockio", "controls blockio devices",
-		new sequential_caller(blockio_ctl), get_subcmds("blockio"), requires_subcommand, optional_card_id, optional_cpu_id,
+    cmd_desc("status", new sequential_caller(status), optional_card_id, optional_cpu_id),
+    cmd_desc("reset", new threaded_caller(_reset), optional_card_id, optional_cpu_id),
+    cmd_desc("wait", new threaded_caller(wait), optional_card_id, optional_cpu_id),
+    cmd_desc("wait-BIOS", new threaded_caller(wait_bios), optional_card_id, optional_cpu_id),
+    cmd_desc("boot", new sequential_caller(boot), optional_card_id, optional_cpu_id, optional_file, optional_value_force_get_last_os),
+    cmd_desc("reboot", new threaded_caller(reboot), optional_card_id, optional_cpu_id, optional_file),
+    cmd_desc("update-BIOS", new threaded_caller(update_bios), optional_card_id, optional_cpu_id, requires_file),
+    cmd_desc("recover-BIOS", new threaded_caller(update_bios), optional_card_id, optional_cpu_id, requires_file),
+    cmd_desc("update-MAC", new sequential_caller(update_mac_addr), requires_card_id, requires_cpu_id, requires_mac_addr),
+    cmd_desc("update-SN", new sequential_caller(set_serial_number), requires_card_id, requires_serial_number),
+    cmd_desc("update-EEPROM", new sequential_caller(update_eeprom), optional_card_id, requires_file),
+    cmd_desc("clear-SMB-event-log", new threaded_caller(clear_smb_event_log), optional_card_id, optional_cpu_id),
+    cmd_desc("script", new sequential_caller(script), optional_card_id, optional_cpu_id, optional_file),
+    cmd_desc("config-show", new sequential_caller(config_show), optional_card_id, optional_cpu_id, optional_config_param, optional_value_only_param),
+    cmd_desc("config", new sequential_caller(config_change), optional_card_id, optional_cpu_id, optional_blockio_id, requires_config_param, requires_config_value),
+    cmd_desc("config-use", new sequential_caller(config_use)),
+    cmd_desc("config-default", new sequential_caller(config_default)),
+    cmd_desc("temp", new sequential_caller(read_temp), optional_card_id, optional_cpu_id),
+    cmd_desc("ICMP-watchdog", new threaded_caller(ICMP_watchdog), requires_trigger, optional_card_id, optional_cpu_id, optional_ip),
+    cmd_desc("network", new sequential_caller(get_network_info), get_subcmds("network"), requires_subcommand, optional_card_id, optional_cpu_id),
+    cmd_desc("info", new sequential_caller(print_info_cmd_data), get_subcmds("info"), requires_subcommand, optional_card_id, optional_cpu_id),
+    cmd_desc("info-hw", new sequential_caller(print_hw_info), optional_card_id),
+    cmd_desc("info-system", new sequential_caller(print_system_info)),
+    cmd_desc("pwrbtn-short", new threaded_caller(toggle_power_button), optional_card_id, optional_cpu_id),
+    cmd_desc("pwrbtn-long", new threaded_caller(hold_power_button), optional_card_id, optional_cpu_id),
+    cmd_desc("help", new sequential_caller(help)),
+    cmd_desc("blockio", new sequential_caller(blockio_ctl), get_subcmds("blockio"), requires_subcommand, optional_card_id, optional_cpu_id,
 						  optional_blockio_id, optional_blockio_type, optional_blockio_type_param),
-	cmd_desc("pxe", "manage PXE boot network cards",
-		new sequential_caller(pxe_ctl), get_subcmds("pxe"), requires_subcommand, optional_card_id, optional_cpu_id),
-	cmd_desc("os-shutdown", "OS shutdown",
-		new sequential_caller(os_shutdown), optional_card_id, optional_cpu_id),
-	cmd_desc("get-BIOS-cfg", "read BIOS configuration",
-		new sequential_caller(get_bios_cfg), optional_card_id, optional_cpu_id, optional_bios_cfg_name),
-	cmd_desc("set-BIOS-cfg", "change BIOS configuration",
-		new threaded_caller(set_bios_cfg), optional_card_id, optional_cpu_id, requires_bios_cfg_name_and_value_pairs),
-	cmd_desc("id-led", "turn on/off led light on card",
-		new threaded_caller(id_led), get_subcmds("id-led"), requires_subcommand, optional_card_id)
+    cmd_desc("pxe", new sequential_caller(pxe_ctl), get_subcmds("pxe"), requires_subcommand, optional_card_id, optional_cpu_id),
+    cmd_desc("os-shutdown", new sequential_caller(os_shutdown), optional_card_id, optional_cpu_id),
+    cmd_desc("get-BIOS-cfg", new sequential_caller(get_bios_cfg), optional_card_id, optional_cpu_id, optional_bios_cfg_name),
+    cmd_desc("set-BIOS-cfg", new threaded_caller(set_bios_cfg), optional_card_id, optional_cpu_id, requires_bios_cfg_name_and_value_pairs),
+    cmd_desc("id-led", new threaded_caller(id_led), get_subcmds("id-led"), requires_subcommand, optional_card_id)
 };
 
 
 static const cmd_desc debug_cmds_desc[] = {
-	cmd_desc("boot-USB", "boot OS for cpu using USB",
-		new threaded_caller(boot_USB), optional_card_id, optional_cpu_id),
-	cmd_desc("set-SMB-id", "set SMB id for card",
-		new sequential_caller(set_SMB_id), requires_card_id, requires_smb_id),
-	cmd_desc(GOLD_CMD, "golden BIOS mode control",
-		new threaded_caller(gold_control), requires_subcommand, optional_card_id, optional_cpu_id),
+    cmd_desc("boot-USB", new threaded_caller(boot_USB), optional_card_id, optional_cpu_id),
+    cmd_desc("set-SMB-id", new sequential_caller(set_SMB_id), requires_card_id, requires_smb_id),
+    cmd_desc(GOLD_CMD, new threaded_caller(gold_control), requires_subcommand, optional_card_id, optional_cpu_id),
 };
 
 const cmd_desc * get_command(const char * func_name)

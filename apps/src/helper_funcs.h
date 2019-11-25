@@ -42,9 +42,7 @@
 #include <iostream>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/asio/ip/address.hpp>
-#include <boost/filesystem.hpp>
 #include <boost/interprocess/sync/named_mutex.hpp>
-#include <boost/interprocess/sync/file_lock.hpp>
 #include <boost/interprocess/sync/scoped_lock.hpp>
 
 
@@ -104,7 +102,7 @@ boost::posix_time::ptime get_timeout(unsigned int timeout);
 int replace_all(std::string &str, const std::string &what, const std::string &with);
 std::string get_shm_mutex_path(const std::string &name);
 bool could_open_file(const char *file_path);
-filehandle_t open_path(const char* path, int flags = O_RDWR);
+filehandle_t open_path(const char* path, int flags = O_RDWR| O_CLOEXEC);
 
 extern "C" {
 #endif
@@ -131,9 +129,7 @@ bool is_ip_address(const char *str);
 bool is_hex_digit(char digit);
 bool is_unsigned_number(const char *str);
 bool is_root();
-bool path_exists(const char *path);
 bool file_exists(const char *filename);
-bool character_device_exists(const char *filename);
 size_t get_file_size(const char *filename);
 int get_id(enum unix_ownership_kind kind);
 int get_vcausers_default_user_id();

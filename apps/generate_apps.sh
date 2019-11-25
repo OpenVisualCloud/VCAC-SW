@@ -53,10 +53,10 @@ function gen_apps {
 	cmake "${_CMAKE_DEFS[@]}" -H. -B"${WORKSPACE}" || die 'Generating project with cmake failed'
 	(
 		cd "${WORKSPACE}"
-		# QB VM with Debian is really flaky, reduce memory use by single threaded compilation
-		if [ "${OS}" != DEBIAN ]; then
-			make -j HOME="${WORKSPACE}"	|| die 'Executing make failed'
-		fi
+		# first try to build in parallel, but retry in single threaded mode (beacause some(times) build machines are flaky)
+		make -j HOME="${WORKSPACE}" 2>/dev/null \
+			|| make HOME="${WORKSPACE}" \
+			|| die 'Executing make failed'
 		cpack -DSGX="${SGX}" || die "Error making deb package"
 	)
 }
@@ -73,4 +73,6 @@ if [ "${SGX}" = n ] ; then
 	export SGX=''
 fi
 gen_apps
-echo "Build has ended with status: $?"
+EXIT_CODE=$?
+echo "Build has ended with status: ${EXIT_CODE}"
+exit ${EXIT_CODE}

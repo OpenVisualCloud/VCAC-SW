@@ -103,7 +103,7 @@ _vcactl()
 		system
 		node-os
 		BIOS
-		memsize
+		meminfo
 		cpu-uuid
 		node-stats'
 

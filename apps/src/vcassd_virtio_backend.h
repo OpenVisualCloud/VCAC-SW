@@ -23,6 +23,12 @@
 
 #include "vcassd_common.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 void add_virtio_net_device(struct vca_info *vca);
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -197,7 +197,7 @@ function generate_k4_centos {
 # we mark vanilla kernel in repo (eg. with commit containing "Base Kernel",
 # but it is not always the case)
 # all descendant commits are treated as patches
-# and applied over base source rpm by ValleyVistaTools/KernelBuildScript/vca_kernel_build.sh
+# and applied over base source rpm
 function get_kernel_base {
 	# _BASE_SHA1 should be commit marked as base kernel, so
 	# it is the one with "Base Kernel" *if there is such commit*
@@ -372,4 +372,6 @@ case "${OS}" in
 	;;
 esac
 
-echo "Build has ended with status: $?"
+EXIT_CODE=$?
+echo "Build has ended with status: ${EXIT_CODE}"
+exit ${EXIT_CODE}

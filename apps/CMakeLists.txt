@@ -40,7 +40,7 @@ set (vcactl_sources ${PROJECT_SOURCE_DIR}/src/vcactrl.cpp
                     ${PROJECT_SOURCE_DIR}/src/log_args.cpp
                     ${PROJECT_SOURCE_DIR}/src/version.cpp
                     ${PROJECT_SOURCE_DIR}/src/vca_eeprom_update.cpp)
-set (vcactld_sources ${PROJECT_SOURCE_DIR}/src/vcassd.c
+set (vcactld_sources ${PROJECT_SOURCE_DIR}/src/daemon.cpp
                      ${PROJECT_SOURCE_DIR}/src/vcassd_virtio_backend.c
                      ${PROJECT_SOURCE_DIR}/src/vcassd_common.c
                      ${PROJECT_SOURCE_DIR}/src/vca_watchdog.cpp)
@@ -53,7 +53,7 @@ set (vcactl_headers ${PROJECT_SOURCE_DIR}/src/vcactrl.h
                     ${PROJECT_SOURCE_DIR}/src/log_args.h
                     ${PROJECT_SOURCE_DIR}/src/version.h
                     ${PROJECT_SOURCE_DIR}/src/vca_eeprom_update.h)
-set (vcactld_headers ${PROJECT_SOURCE_DIR}/src/vcassd.h
+set (vcactld_headers
                      ${PROJECT_SOURCE_DIR}/src/vcassd_virtio_backend.h
                      ${PROJECT_SOURCE_DIR}/src/vcassd_common.h)
 set (helper_headers ${PROJECT_SOURCE_DIR}/src/helper_funcs.h
@@ -99,7 +99,7 @@ unset(Boost_INCLUDE_DIRS CACHE)		# unnecessary?
 unset(Boost_LIBRARY_DIRS CACHE)		# unnecessary?
 find_package(Boost
 	REQUIRED
-	COMPONENTS filesystem thread system
+	COMPONENTS thread system
 )
 if(NOT Boost_FOUND)
     message(FATAL_ERROR "Boost-devel package not installed! Exiting!")
@@ -160,6 +160,9 @@ message(STATUS "CMAKE_RUNTIME_OUTPUT_DIRECTORY = ${CMAKE_RUNTIME_OUTPUT_DIRECTOR
 # adding directories which need to include to projects
 include_directories ("${PROJECT_SOURCE_DIR}/src")
 include_directories ("${MODULES_SRC}/vca/common")
+include_directories ("${MODULES_SRC}/vca/vca_mgr")
+include_directories ("${MODULES_SRC}/vca/vca_mgr_extd")
+include_directories ("${MODULES_SRC}/vca/vca_csm")
 include_directories ("${MODULES_SRC}/vca/blockio")
 include_directories ("${MODULES_SRC}/vca/pxe")
 include_directories ("${MODULES_SRC}/vca/vca_virtio/uapi")
@@ -171,9 +174,6 @@ add_executable(vcactl ${vcactl_sources} ${helper_sources}
 add_executable(vcactld ${vcactld_sources} ${helper_sources}
                        ${vcactld_headers} ${helper_headers})
 target_include_directories(vcactld PRIVATE ${MODULES_SRC}/vca/vop)
-target_include_directories(vcactl PRIVATE ${MODULES_SRC}/vca/vca_csm
-                                          ${MODULES_SRC}/vca/vca_mgr
-                                          ${MODULES_SRC}/vca/vca_mgr_extd)
 
 # add here variables affecting contents of the man page and bash completions
 set(ConditionalTextList SGX)
@@ -228,13 +228,13 @@ endif()
 set(services_dir_systemd "${systemd_dir}/system")
 set(services_dir_rcd_initd "/etc/rc.d/init.d")
 set(tmpfilesconfigdir "/usr/lib/tmpfiles.d")
-set(rwxrwxrwx OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_WRITE WORLD_EXECUTE) #777
-set(rwxrwxr__ OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ) #774
 set(rwxrwx___ OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE) #770
+set(rwxr_xr_x OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE) #755
+set(rwxr_x___ OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE) #750
+set(rwxr_____ OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ) #740
 set(rw_rw_r__ OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE WORLD_READ) #664
-set(rw_r__r__ OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ)
-set(rw_rw____ OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE ) #660
-set(rwxr_x___ OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE ) #750
+set(rw_rw____ OWNER_READ OWNER_WRITE GROUP_READ GROUP_WRITE) #660
+set(rw_r__r__ OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ) #644
 
 # for CentOS 7X and 6X there are different default service mangers (init systems): systemd or SysVinit
 # so we need two targets: install_systemd - for CentOS 7X and install_systemV - for CentOS 6X
@@ -253,17 +253,17 @@ add_custom_command(TARGET install_systemV
 	COMMAND ${CMAKE_COMMAND} -E copy ${PROJECT_SOURCE_DIR}/services/vcactl ${DESTDIR}/${services_dir_rcd_initd}
 )
 # files to be install after build target "install"
-install(FILES ${PROJECT_SOURCE_DIR}/services/vcactl.service			PERMISSIONS ${rw_r__r__} DESTINATION ${DESTDIR}${services_dir_systemd})
-install(FILES ${CMAKE_BINARY_DIR}/bin/vcactl                                    PERMISSIONS ${rwxrwxrwx} DESTINATION ${DESTDIR}${sbindir})
-install(FILES ${CMAKE_BINARY_DIR}/bin/vcactld                                   PERMISSIONS ${rwxrwxrwx} DESTINATION ${DESTDIR}${sbindir})
-install(FILES ${PROJECT_SOURCE_DIR}/vca_config.d/vca_config.xml 		PERMISSIONS ${rw_rw_r__} DESTINATION ${DESTDIR}${vcaconfigdir})
+install(FILES ${PROJECT_SOURCE_DIR}/services/vcactl.service                     PERMISSIONS ${rw_r__r__} DESTINATION ${DESTDIR}${services_dir_systemd})
+install(FILES ${CMAKE_BINARY_DIR}/bin/vcactl                                    PERMISSIONS ${rwxr_xr_x} DESTINATION ${DESTDIR}${sbindir})
+install(FILES ${CMAKE_BINARY_DIR}/bin/vcactld                                   PERMISSIONS ${rwxr_xr_x} DESTINATION ${DESTDIR}${sbindir})
+install(FILES ${PROJECT_SOURCE_DIR}/vca_config.d/vca_config.xml                 PERMISSIONS ${rw_rw_r__} DESTINATION ${DESTDIR}${vcaconfigdir})
 install(FILES ${PROJECT_SOURCE_DIR}/vca_config.d/vca_xen_multicast_config.xml   PERMISSIONS ${rw_rw_r__} DESTINATION ${DESTDIR}${vcaconfigdir})
 install(FILES ${PROJECT_SOURCE_DIR}/vca_config.d/vca_daemon_default.sh          PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${vcaconfigdir})
 install(FILES ${PROJECT_SOURCE_DIR}/vca_config.d/vca_auto_boot.sh               PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${vcaconfigdir})
 install(FILES ${PROJECT_SOURCE_DIR}/vca_config.d/MACUpdateImage.img             PERMISSIONS ${rw_rw____} DESTINATION ${DESTDIR}${vcaconfigdir})
 install(FILES ${PROJECT_SOURCE_DIR}/vca_config.d/SerialNumberUpdateImage.img    PERMISSIONS ${rw_rw____} DESTINATION ${DESTDIR}${vcaconfigdir})
 install(FILES ${PROJECT_SOURCE_DIR}/vca_config.d/ClearSMBiosEventLogImage.img   PERMISSIONS ${rw_rw____} DESTINATION ${DESTDIR}${vcaconfigdir})
-install(FILES ${PROJECT_SOURCE_DIR}/tmpfiles.d/vca.conf                         PERMISSIONS ${rwxrwxrwx} DESTINATION ${DESTDIR}${tmpfilesconfigdir})
+install(FILES ${PROJECT_SOURCE_DIR}/tmpfiles.d/vca.conf                         PERMISSIONS ${rw_r__r__} DESTINATION ${DESTDIR}${tmpfilesconfigdir})
 install(FILES ${PROJECT_SOURCE_DIR}/rules/95-vca.rules                          PERMISSIONS ${rw_r__r__} DESTINATION ${DESTDIR}${udevrulesdir})
 install(FILES ${PROJECT_SOURCE_DIR}/rules/96-vop.rules                          PERMISSIONS ${rw_r__r__} DESTINATION ${DESTDIR}${udevrulesdir})
 install(FILES ${PROJECT_SOURCE_DIR}/rules/97-host_eth_up.rules                  PERMISSIONS ${rw_r__r__} DESTINATION ${DESTDIR}${udevrulesdir})
@@ -275,17 +275,17 @@ install(FILES ${PROJECT_SOURCE_DIR}/xen_scripts/card_vm.hvm                     
 install(FILES ${PROJECT_SOURCE_DIR}/xen_scripts/card_gfx_vm.hvm                 PERMISSIONS ${rwxrwx___} DESTINATION ${DESTDIR}${vcalibdir})
 install(FILES ${PROJECT_SOURCE_DIR}/xen_scripts/windows_card_gfx_vm.hvm         PERMISSIONS ${rwxrwx___} DESTINATION ${DESTDIR}${vcalibdir})
 install(FILES ${PROJECT_SOURCE_DIR}/xen_scripts/vca_start_card_domu.sh          PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${sbindir})
-install(FILES ${PROJECT_SOURCE_DIR}/scripts/vca_eth_ifup.sh                     PERMISSIONS ${rwxrwxr__} DESTINATION ${DESTDIR}${sbindir})
-install(FILES ${PROJECT_SOURCE_DIR}/scripts/make_config.py                      PERMISSIONS ${rwxrwxr__} DESTINATION ${DESTDIR}${vcalibdir})
-install(FILES ${PROJECT_SOURCE_DIR}/scripts/vca_config_upgrade.sh               PERMISSIONS ${rwxrwxr__} DESTINATION ${DESTDIR}${sbindir})
-install(FILES ${PROJECT_SOURCE_DIR}/scripts/vca_load_modules.sh                 PERMISSIONS ${rwxrwxr__} DESTINATION ${DESTDIR}${sbindir})
-install(FILES ${PROJECT_SOURCE_DIR}/kvm_scripts/vca_start_card_kvm.sh		PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${sbindir})
-install(FILES ${PROJECT_SOURCE_DIR}/kvm_scripts/kvmsetup.sh			PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${vcalibdir})
-install(FILES ${PROJECT_SOURCE_DIR}/kvm_scripts/vca_kvmgtctl.sh			PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${sbindir})
-install(FILES ${PROJECT_SOURCE_DIR}/kvm_scripts/kvmgtctl_node.sh		PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${vcalibdir})
+install(FILES ${PROJECT_SOURCE_DIR}/scripts/vca_eth_ifup.sh                     PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${sbindir})
+install(FILES ${PROJECT_SOURCE_DIR}/scripts/make_config.py                      PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${vcalibdir})
+install(FILES ${PROJECT_SOURCE_DIR}/scripts/vca_config_upgrade.sh               PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${sbindir})
+install(FILES ${PROJECT_SOURCE_DIR}/scripts/vca_load_modules.sh                 PERMISSIONS ${rwxr_____} DESTINATION ${DESTDIR}${sbindir})
+install(FILES ${PROJECT_SOURCE_DIR}/kvm_scripts/vca_start_card_kvm.sh           PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${sbindir})
+install(FILES ${PROJECT_SOURCE_DIR}/kvm_scripts/kvmsetup.sh                     PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${vcalibdir})
+install(FILES ${PROJECT_SOURCE_DIR}/kvm_scripts/vca_kvmgtctl.sh                 PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${sbindir})
+install(FILES ${PROJECT_SOURCE_DIR}/kvm_scripts/kvmgtctl_node.sh                PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${vcalibdir})
 install(FILES ${PROJECT_SOURCE_DIR}/etc_profile_scripts/vcausers_setup_path.sh  PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${etcprofiledir})
-install(FILES ${PROJECT_SOURCE_DIR}/tools/vca_image_resize.sh			PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${sbindir})
-install(FILES ${PROJECT_SOURCE_DIR}/tools/vcanodeinfo.sh			PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${vcalibdir})
+install(FILES ${PROJECT_SOURCE_DIR}/tools/vca_image_resize.sh                   PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${sbindir})
+install(FILES ${PROJECT_SOURCE_DIR}/tools/vcanodeinfo.sh                        PERMISSIONS ${rwxr_x___} DESTINATION ${DESTDIR}${vcalibdir})
 install(FILES ${CMAKE_BINARY_DIR}/vcactl.1.gz                                   PERMISSIONS ${rw_r__r__} DESTINATION ${DESTDIR}${man_dir})
 install(FILES ${CMAKE_BINARY_DIR}/bash_completion/vcactl                        PERMISSIONS ${rw_r__r__} DESTINATION ${DESTDIR}${compl_dir})
 

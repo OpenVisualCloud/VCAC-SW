@@ -38,7 +38,6 @@
  */
 enum vca_card_type {
 	VCA_UNKNOWN     = 0x0,
-	VCA_POC         = 0x1,
 	VCA_VV_FAB1     = 0x2,
 	VCA_VV_FAB2     = 0x4,
 	VCA_MV_FAB1     = 0x8,
@@ -84,6 +83,7 @@ enum vca_lbp_states {
 	VCA_AFTER_REBOOT,
 	VCA_POWER_DOWN,
 	VCA_POWERING_DOWN,
+	VCA_BOOTING_PXE,
 	VCA_SIZE
 };
 
@@ -156,6 +156,7 @@ static inline const char * const get_vca_os_type_string(enum vca_os_type os_type
 #define VCA_AFTER_REBOOT_TEXT "waiting_for_boot"
 #define VCA_POWER_DOWN_TEXT "power_off"
 #define VCA_POWERING_DOWN_TEXT "powering_down"
+#define VCA_BOOTING_PXE_TEXT "booting_via_pxe"
 /*
  * A state-to-string lookup table, for exposing a human readable state
  * via sysfs. Always keep in sync with enum vca_lbp_states
@@ -217,6 +218,8 @@ static inline const char * const get_vca_state_string(enum vca_lbp_states state)
 			return VCA_POWER_DOWN_TEXT;
 		case VCA_POWERING_DOWN:
 			return VCA_POWERING_DOWN_TEXT;
+		case VCA_BOOTING_PXE:
+			return VCA_BOOTING_PXE_TEXT;
 		case VCA_SIZE:
 		default:
 #ifdef __KERNEL__
@@ -289,6 +292,8 @@ static inline enum vca_lbp_states get_vca_state_num(const char * str, size_t len
 		return VCA_POWER_DOWN;
 	else if (!strncmp(VCA_POWERING_DOWN_TEXT, str, len))
 		return VCA_POWERING_DOWN;
+	else if (!strncmp(VCA_BOOTING_PXE_TEXT, str, len))
+			return VCA_BOOTING_PXE;
 	else
 		return VCA_SIZE;
 }
@@ -384,6 +389,10 @@ enum vca_agent_cmd {
 	VCA_AGENT_CPU_UUID,
 	VCA_AGENT_NODE_STATS,
 	VCA_AGENT_SN_INFO,
+	VCA_AGENT_MODE_DMA,
+	VCA_AGENT_MODE_MEMCPY,
+	VCA_AGENT_MEM_INFO,
+	VCA_AGENT_DMA_INFO,
 	VCA_AGENT_CMD_SIZE
 };
 
@@ -394,6 +403,8 @@ enum vca_agent_cmd {
 	__LINE__, \
 	(u64)(VAL))
 
-#endif
 
 #define VCA_DMA_LINK_NAME "dma_device"
+
+#endif
+
