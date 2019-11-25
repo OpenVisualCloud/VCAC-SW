@@ -58,6 +58,10 @@ Resulting binaries could be installed on server machines with VCA pci extension
 cards, it could be different from building machine.
 
 
+## Products
+VCAC-A release locates at branch VCAC-A.
+https://github.com/OpenVisualCloud/VCAC-SW/tree/VCAC-A
+
 ## Contributing
 Use GitHub's "issues" or "pull-request" features,
 or reach via e-mail directly developers: Masłowski, Karol or Kitszel, Przemysław (for e-mail addresses, look in git log).
