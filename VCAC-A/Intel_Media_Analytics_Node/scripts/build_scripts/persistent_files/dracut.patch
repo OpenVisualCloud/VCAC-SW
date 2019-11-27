@@ -1,0 +1,13 @@
+--- /usr/lib/dracut/modules.d/09console-setup/module-setup.sh	2015-11-29 11:44:31.000000000 +0100
++++ persistent_files/module-setup.sh	2017-12-21 07:17:10.426243618 +0100
+@@ -22,7 +22,9 @@
+     local vardir
+     vardir=/var/lib/dracut
+ 
+-    cp -a $vardir/console-setup-dir/* $initdir/
++    # AO: as per bug=828915: cp -a $vardir/console-setup-dir/* $initdir/
++    cp -a $vardir/console-setup-dir/bin/* $initdir/bin
++    cp -a $vardir/console-setup-dir/etc/* $initdir/etc
+     # gzip is workaround a bug in current console-setup
+     inst_multiple gzip $(cat $vardir/console-setup-files)
+     inst ${moddir}/console-setup.sh /lib/udev/console-setup

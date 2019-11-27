@@ -1,0 +1,5 @@
+SUBSYSTEM!="net", GOTO="net_end"
+ACTION!="add", GOTO="net_end"
+ENV{INTERFACE}=="eth0", RUN+="/sbin/vca_up.sh", GOTO="net_end"
+NAME=="eth0", RUN+="/sbin/vca_up.sh", GOTO="net_end"
+LABEL="net_end"

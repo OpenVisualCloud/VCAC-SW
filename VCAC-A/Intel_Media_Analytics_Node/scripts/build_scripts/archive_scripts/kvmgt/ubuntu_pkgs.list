@@ -1,0 +1,30 @@
+# This is a list of Ubuntu packages
+# Empty lines and parts of line starting with the hash (#) are ignored
+
+# Needed for KVMGT as per https://github.com/intel/gvt-linux/wiki/GVTg_Setup_Guide :
+git
+libfdt-dev
+libpixman-1-dev
+libssl-dev
+vim
+socat
+libsdl1.2-dev
+libspice-server-dev
+autoconf
+libtool
+xtightvncviewer
+tightvncserver
+x11vnc
+libsdl1.2-dev
+uuid-runtime
+uuid
+uml-utilities
+bridge-utils
+python-dev
+liblzma-dev
+libc6-dev
+nmap
+
+# required by /usr/bin/qemu-system-x86_64
+libnuma1
+libcurl4-openssl-dev # libcurl4-gnutls-dev should be equivalent

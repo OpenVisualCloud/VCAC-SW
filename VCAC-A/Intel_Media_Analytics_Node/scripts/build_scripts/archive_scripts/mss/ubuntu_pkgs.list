@@ -1,0 +1,16 @@
+# This is a list of Ubuntu packages
+# Empty lines and parts of line starting with the hash (#) are ignored
+
+gcc
+make
+expect
+libncurses5-dev
+patch
+initramfs-tools-core
+grub2-common
+libxext6
+libx11-6
+libxfixes3
+libpciaccess0
+libelf-dev	# MSS 2018R1, to generate ORC metadata for CONFIG_UNWINDER_ORC=y; workaround for bug https://bugs.launchpad.net/ubuntu/+source/linux/+bug/1741955
+libdrm2
