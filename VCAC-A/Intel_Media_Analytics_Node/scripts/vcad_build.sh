@@ -32,7 +32,6 @@ readonly DEB_DIR="${ROOT_DIR}/deb"
 readonly DEFAULT_BUILD_DIR="${ROOT_DIR}/build"
 readonly DEFAULT_RUN_MODE="host"
 readonly DEFAULT_SIZE=48
-readonly DEFAULT_OPT="FULL"
 
 readonly FFMPEG_NAME="FFmpeg"
 
@@ -82,7 +81,7 @@ readonly OPENVN_LINK="https://files.pythonhosted.org/packages/77/30/36c3f0644fa9
 # Globals
 BUILD_DIR=${DEFAULT_BUILD_DIR}
 SET_SIZE=${DEFAULT_SIZE}
-SET_OPT=${DEFAULT_OPT}
+SET_OPT=
 RUN_MODE="${DEFAULT_RUN_MODE}"
 DOWNLOAD_USING_CACHE=0
 PARAM_HTTP_PROXY=
@@ -124,7 +123,7 @@ Options:
 -y, --https-proxy <https_proxy>	Set the https_proxy environment variable.
 -z, --no-proxy <no_proxy>	Set the no_proxy environment variablie.
 -e, --size <image size> To set the image size, default: ${DEFAULT_SIZE}
--o, --opt <build options> To choose which build option default:${DEFAULT_OPT}
+-o, --opt <build options(IPS,FULL,BASIC)> To choose which build option and this command is necessary .
 -h, --help	Show this help screen.
 "
 }
@@ -171,7 +170,7 @@ parse_parameters(){
 			    SET_SIZE="${2:-${DEFAULT_SIZE}}"
 				shift; shift;;
 			-o|--opt)
-			    SET_OPT="${2:-${DEFAULT_OPT}}"
+			    SET_OPT="${2:-}"
 				shift; shift;;			
 			-h|--help)
 				show_help
@@ -180,6 +179,15 @@ parse_parameters(){
 				show_help && die "Unknown parameter '$1'"
 		esac
 	done
+        if [ "${SET_OPT}" == "" ];then
+		show_help
+		exit 0
+	else
+	        if [ "${SET_OPT}" != "IPS" -a  "${SET_OPT}" != "FULL" -a "${SET_OPT}" != "BASIC" ];then
+			show_help
+			exit 0
+		fi
+	fi
 
 	debug ${INITIAL_DEBUG_LEVEL} "-- parse_parameters"
 }
@@ -516,20 +524,6 @@ build_vcad() {
 		_copy "${_DEB_FILE}" "${_VCAD_REPKG_PATH}/$(basename ${_DEB_FILE})"
 	done
 
-	## copy mss
-	#local _MSS_FILE_NAME=""
-	#for _MSS_FILE in ${TAR_DIR}/intel-linux-media*.tar.gz; do
-	#	_MSS_FILE_NAME=$(basename ${_MSS_FILE})
-	#	#_MSS_FILE_NAME="${_MSS_FILE%%.*}"
-	#	break
-	#done
-	#[ -z "${_MSS_FILE_NAME}" ] && die "Failed to get linux media file name"
-	#_extract_tgz "${TAR_DIR}/${_MSS_FILE_NAME}" "${_DOWNLOAD_DIR}"
-
-	#_copy -r "${_DOWNLOAD_DIR}/intel-linux-media-16.9-10018/etc" ${_VCAD_MSS_PATH}
-	#_copy -r "${_DOWNLOAD_DIR}/intel-linux-media-16.9-10018/opt" ${_VCAD_MSS_PATH}
-	#_copy ${_DOWNLOAD_DIR}/intel-linux-media-16.9-10018/install_*.sh ${_VCAD_MSS_PATH}
-
 	# copy build scripts
 	_copy -r "${SCRIPT_DIR}/build_scripts" "${_IMAGE_BUILD_PATH}"
 
@@ -628,13 +622,11 @@ install_vcad() {
 	echo '	make && make install' >> install_package_in_image.sh
 	echo '	if [ $? != 0 ];then' >> install_package_in_image.sh
 	echo '		echo "[Error] fail to install drv_ion"' >> install_package_in_image.sh
-	echo '		exit 1' >> install_package_in_image.sh
 	echo '	fi' >> install_package_in_image.sh
 	echo "	cd /opt/intel/openvino_${OPENVNO_DATE}/deployment_tools/inference_engine/external/hddl/drivers/drv_vsc " >> install_package_in_image.sh
 	echo '	make && make install' >> install_package_in_image.sh
 	echo '	if [ $? != 0 ];then' >> install_package_in_image.sh
 	echo '		echo "[Error] fail to install drv_ion"' >> install_package_in_image.sh
-	echo '		exit 1' >> install_package_in_image.sh
 	echo '	fi' >> install_package_in_image.sh
 		
 	echo '}' >> install_package_in_image.sh
