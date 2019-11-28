@@ -123,7 +123,7 @@ Options:
 -y, --https-proxy <https_proxy>	Set the https_proxy environment variable.
 -z, --no-proxy <no_proxy>	Set the no_proxy environment variablie.
 -e, --size <image size> To set the image size, default: ${DEFAULT_SIZE}
--o, --opt <build options(IPS,FULL,BASIC)> To choose which build option and this command is necessary .
+-o, --opt <build options(IPS,FULL,BASIC，EXTENDED)> To choose which build option and this command is necessary .
 -h, --help	Show this help screen.
 "
 }
@@ -183,7 +183,7 @@ parse_parameters(){
 		show_help
 		exit 0
 	else
-	        if [ "${SET_OPT}" != "IPS" -a  "${SET_OPT}" != "FULL" -a "${SET_OPT}" != "BASIC" ];then
+	        if [ "${SET_OPT}" != "IPS" -a  "${SET_OPT}" != "FULL" -a "${SET_OPT}" != "BASIC" -a "${SET_OPT}" != "EXTENDED" ];then
 			show_help
 			exit 0
 		fi
@@ -562,7 +562,6 @@ install_vcad() {
 	local _DOWNLOAD_DIR="${_VCAA_KERNEL_DIR}/download"
 
 	_create_dir "${_MOUNT_PATH}"
-
 	_cd "${_VCAD_INSTALL_PATH}"
 	gzip -d -v vca_disk*.gz || die "Failed to extract vcad archive"
 	notice "extracting base vcad image..."
@@ -586,17 +585,17 @@ install_vcad() {
 	_copy "${_DOWNLOAD_DIR}/${NUMPY_NAME}" "${_ROOT_PKG_PATH}/${NUMPY_NAME}"
 	_copy "${_DOWNLOAD_DIR}/${OPENCV_NAME}" "${_ROOT_PKG_PATH}/${OPENCV_NAME}"
 
-	if [ ${SET_OPT} == "FULL" ];then
+	if [ ${SET_OPT} == "FULL" -o ${SET_OPT} == "EXTENDED" ];then
 		#download openvino
 		_download "${OPENVNO_LINK}" "${_DOWNLOAD_DIR}/${OPENVNO_NAME}" "${OPENVNO_NAME}"
 		_copy "${_DOWNLOAD_DIR}/${OPENVNO_NAME}" "${_ROOT_PKG_PATH}/${OPENVNO_NAME}"
 	fi
-	if [ ${SET_OPT} == "FULL" -o ${SET_OPT} == "IPS" ];then
+	if [ ${SET_OPT} == "FULL" -o ${SET_OPT} == "IPS" -o ${SET_OPT} == "EXTENDED" ];then
 		#Download mss_ocl
 		_download "${MSS_OCL_LINK}" "${_DOWNLOAD_DIR}/${MSS_OCL_NAME}" "${MSS_OCL_NAME}"
 		_copy "${_DOWNLOAD_DIR}/${MSS_OCL_NAME}" "${_ROOT_PKG_PATH}/${MSS_OCL_NAME}"
 	fi
-	if [ ${SET_OPT} == "IPS" ];then
+	if [ ${SET_OPT} == "IPS" -o ${SET_OPT} == "EXTENDED" ];then
 		if [ -d ${CACHE_DIR}/${FFMPEG_NAME} ];then
 			_copy -r "${CACHE_DIR}/${FFMPEG_NAME}" "${_ROOT_PKG_PATH}"
 		else
@@ -624,27 +623,26 @@ install_vcad() {
 	echo '	apt install nasm' >> install_package_in_image.sh
 	echo '	./configure --disable-lzma --enable-shared --disable-static' >> install_package_in_image.sh
 	echo '	make -j `nproc`' >> install_package_in_image.sh
-	echo '	mkdir -p /opt/intel/vcaa/ffmpeg/lib' >> install_package_in_image.sh
-	echo '	cp libavcodec/libavcodec.so /opt/intel/vcaa/ffmpeg/lib/' >> install_package_in_image.sh
-	echo '	cp libavformat/libavformat.so /opt/intel/vcaa/ffmpeg/lib/' >> install_package_in_image.sh
-	echo '	cp libavdevice/libavdevice.so /opt/intel/vcaa/ffmpeg/lib/' >> install_package_in_image.sh
-	echo '	cp libavutil/libavutil.so /opt/intel/vcaa/ffmpeg/lib/' >> install_package_in_image.sh
-	echo '	cp libavfilter/libavfilter.so /opt/intel/vcaa/ffmpeg/lib/' >> install_package_in_image.sh
-	echo '	cp libswscale/libswscale.so /opt/intel/vcaa/ffmpeg/lib/' >> install_package_in_image.sh
-	echo '	cp libswresample/libswresample.so /opt/intel/vcaa/ffmpeg/lib/' >> install_package_in_image.sh
-	echo "	echo '/opt/intel/vcaa/ffmpeg/lib' >> /etc/ld.so.conf.d/ffmpeg.conf" >> install_package_in_image.sh
-	echo "	ldconfig" >> install_package_in_image.sh
+	echo '  make install' >> install_package_in_image.sh 
 	echo "	apt-get install -y lockfile-progs ffmpeg" >> install_package_in_image.sh
+	echo '  cd ..' >> install_package_in_image.sh
+	echo '  rm -rf FFmpeg' >> install_package_in_image.sh
 	echo "}" >> install_package_in_image.sh
 	echo '#install mss_ocl' >> install_package_in_image.sh
 	echo 'install_mss()' >> install_package_in_image.sh
 	echo '{' >> install_package_in_image.sh
 	echo '	cd /root/package' >> install_package_in_image.sh
 	echo '	tar zxf MediaServerStudioEssentials2019R1HF2_16.9_10018.tar.gz' >> install_package_in_image.sh
+        echo '  if [ $? != 0 ];then' >> install_package_in_image.sh
+        echo '    echo "failed to tar msdk."' >> install_package_in_image.sh
+        echo '  fi' >> install_package_in_image.sh
 	echo '	cd MediaServerStudioEssentials2019R1HF*' >> install_package_in_image.sh
 	echo '	tar -zxvf intel-linux-media*.tar.gz' >> install_package_in_image.sh
 	echo '	cd intel-linux-media*' >> install_package_in_image.sh
 	echo '	echo y | bash install_media.sh' >> install_package_in_image.sh
+        echo '  if [ $? != 0 ];then' >> install_package_in_image.sh
+        echo '    echo "failed to install mss."' >> install_package_in_image.sh
+        echo '  fi'  >> install_package_in_image.sh
 		
 	echo '}' >> install_package_in_image.sh
 	echo 'if [ $opt == "IPS" ];then' >> install_package_in_image.sh
@@ -654,8 +652,9 @@ install_vcad() {
 	echo '	 install_mss' >> install_package_in_image.sh
 			echo 'fi'>> install_package_in_image.sh
 	echo '#install openvino' >> install_package_in_image.sh
-	echo 'if [ $opt == "FULL" ];then' >> install_package_in_image.sh
-	echo '  rm -rf /opt/' >> install_package_in_image.sh
+    echo 'install_openvino()' >> install_package_in_image.sh
+	echo '{' >> install_package_in_image.sh
+    echo '  rm -rf /opt/' >> install_package_in_image.sh
 	echo '  cd /root/package' >> install_package_in_image.sh 
 	echo '	tar -zxf l_openvino_toolkit_p_2019.3.334.tgz' >> install_package_in_image.sh
 	echo '	cd l_openvino_toolkit_p_2019.3.334' >> install_package_in_image.sh
@@ -668,7 +667,18 @@ install_vcad() {
 	echo '			echo "[Error] fail to set the value of accept_eula to accept " ' >> install_package_in_image.sh
 	echo '		fi' >> install_package_in_image.sh
 	echo '	fi' >> install_package_in_image.sh
+	
 	echo '	bash install.sh --ignore-signature --cli-mode -s silent.cfg' >> install_package_in_image.sh
+	echo '}' >> install_package_in_image.sh
+	echo 'if [ $opt == "EXTENDED" ];then' >> install_package_in_image.sh
+	echo '  install_openvino' >> install_package_in_image.sh
+	echo '	install_mss' >> install_package_in_image.sh
+	echo '	cd /root/package/deb' >> install_package_in_image.sh
+	echo '	dpkg -i intel-vcaa-ddwo*.deb' >> install_package_in_image.sh
+	echo '	install_ffmpeg' >> install_package_in_image.sh
+	echo 'fi'>> install_package_in_image.sh
+	echo 'if [ $opt == "FULL" ];then' >> install_package_in_image.sh
+	echo '  install_openvino' >> install_package_in_image.sh
 	echo '	install_mss' >> install_package_in_image.sh
 	echo 'fi'>> install_package_in_image.sh
         echo 'echo "/sbin/modprobe i2c-i801" >> /root/.profile' >> install_package_in_image.sh
@@ -685,8 +695,12 @@ install_vcad() {
 	umount ${_MOUNT_PATH}/dev/ || die "Failed to umount dev"
 	umount ${_MOUNT_PATH} || die "Failed to umount vcad image"
 	rm -rf ${_MOUNT_PATH} || die "Failed to remove ${_MOUNT_PATH}"
+	
+
 	_cd "${_VCAD_INSTALL_PATH}"
 	gzip -v vca_disk*.vcad || die "Failed to compress vcad archive"
+
+
 	debug ${INITIAL_DEBUG_LEVEL} "-- install_vcad"
 }
 
@@ -730,7 +744,7 @@ vcad_build() {
 				elif [ "${_TASK}" == "package" ]; then
 					build_vcad
  				elif [ "${_TASK}" == "install" ]; then
-				 	if [ ${SET_OPT} == "IPS" -o  ${SET_OPT} == "FULL" ];then
+				 	if [ ${SET_OPT} == "IPS" -o  ${SET_OPT} == "FULL" -o ${SET_OPT} == "EXTENDED" ];then
 						install_vcad
 					fi
                                         if [ ${SET_OPT} == "BASIC" ];then
@@ -747,4 +761,5 @@ vcad_build() {
 
 stderr "Called as: $0 $*"
 vcad_build "$@" && stderr "Finished: $0 $*"
+
 
