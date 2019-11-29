@@ -1,6 +1,6 @@
 # Contents
 ## This branch contains:
-- Build script and patches to build host kernel/module/app (CentOS 7.6)
+- Build script and patches to build host kernel/module/app (CentOS 7.4)
 - Build scripts to build OS images for VCAC-A card (Ubuntu 16.04).
 
 # Building
