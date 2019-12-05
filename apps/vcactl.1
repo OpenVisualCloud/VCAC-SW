@@ -22,9 +22,6 @@ wait for BIOS to be ready on node
 boot OS on node using VCA block device vcablk<N>.
 Currently only booting from vcablk0 is supported.
 .TP
-\fBboot\fR vcapxe
-boot OS on node using its PXE network card.
-.TP
 \fBboot\fR [<img_path> | \-\-force\-last\-os\-image]
 boot OS on node(s) using Leveraged Boot Protocol (LBP).
 If no <img_path> is provided, configuration field 'os\-image' is used, unless \-\-force\-last\-os\-image parameter is given, which indicates to use image named by 'last\-os\-image' configuration field.
@@ -125,12 +122,6 @@ manage block devices. Subcommands:
         list [vcablk<N>] : list block devices
         open vcablk<N> [[RO|RW <file_path>]|[ramdisk <size_mb>]] : open block device
         close vcablk<N> : close block device
-.TP
-\fBpxe\fR <subcmd>
-get or set PXE network card state. Subcommands:
-        enable : enable the PXE network card
-        disable : disable the PXE network card
-        status : list PXE network card status
 .TP
 \fBinfo\fR <subcmd>
 print VCA information. Subcommands:

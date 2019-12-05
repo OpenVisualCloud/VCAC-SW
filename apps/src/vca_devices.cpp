@@ -131,7 +131,3 @@ filehandle_t open_cpu_fd(int card_id, int cpu_id) {
 filehandle_t open_blk_fd(int card_id, int cpu_id) {
 	return open_path((VCA_BLK_DEV_PATH + int_to_string(card_id) + int_to_string(cpu_id)).c_str());
 }
-
-filehandle_t open_pxe_fd(int card_id, int cpu_id) {
-	return open_path((VCA_PXE_DEV_PATH + int_to_string(card_id) + int_to_string(cpu_id)).c_str());
-}

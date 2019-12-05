@@ -9,7 +9,6 @@
 #define VCA_MGR_EXTD_DEV_PATH	"/dev/vca_mgr_extd"
 #define VCA_CPU_DEV_PATH	"/dev/vca"
 #define VCA_BLK_DEV_PATH	"/dev/vca_blk_bcknd"
-#define VCA_PXE_DEV_PATH	"/dev/vcapxe"
 
 bool vca_ioctl(filehandle_t fd, unsigned long ioctl_cmd, void *arg);
 const char *get_vca_ioctl_name(unsigned long ioctl_cmd);
@@ -23,6 +22,5 @@ filehandle_t open_card_fd(int card_id);
 filehandle_t open_extd_card_fd(int card_id);
 filehandle_t open_cpu_fd(int card_id, int cpu_id);
 filehandle_t open_blk_fd(int card_id, int cpu_id);
-filehandle_t open_pxe_fd(int card_id, int cpu_id);
 
 #endif // _VCA_DEVICES_H_

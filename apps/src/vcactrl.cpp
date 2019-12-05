@@ -44,7 +44,6 @@
 #include "vca_config_parser.h"
 #include "vca_eeprom_update.h"
 #include "vca_blockio_ctl.h"
-#include "vca_pxe.h"
 #include "vca_devices.h"
 #include "log_args.h"
 #include "version.h"
@@ -738,8 +737,6 @@ const char* get_csm_ioctl_name(unsigned long ioctl_cmd)
 		return "LBP_BOOT_LBPDISK";
 	case VCA_GET_MEM_INFO:
 		return "VCA_GET_MEM_INFO";
-	case LBP_BOOT_VIA_PXE:
-		return "LBP_BOOT_VIA_PXE";
 	default:
 		LOG_DEBUG("csm ioctl command name for %lx not found!\n", ioctl_cmd);
 		return "";
@@ -2216,17 +2213,12 @@ bool boot(caller_data d)
 		return false;
 
 	char boot_path[PATH_MAX + 1];
-	bool boot_pxe = false;
 	struct stat info;
 	char const*file_lbp = NULL;
 
 	if (!strcmp(relative_path, BLOCKIO_BOOT_DEV_NAME)) {
 		d.LOG_CPU(DEBUG_INFO, "BOOT BLOCK DEVICE!\n");
 		STRCPY_S(boot_path, relative_path, sizeof(boot_path));
-	} else if (!strcmp(relative_path, PXE_BOOT_DEV_NAME)) {
-		d.LOG_CPU(DEBUG_INFO, "BOOT VIA PXE!\n");
-		STRCPY_S(boot_path, relative_path, sizeof(boot_path));
-		boot_pxe = true;
 	} else {
 		if (!realpath(relative_path, boot_path)) {
 			d.LOG_CPU_ERROR("Cannot canonicalize OS image path (got %s): %s!\n",
@@ -2268,19 +2260,13 @@ bool boot(caller_data d)
 			return false;
 		}
 
-		if (!file_lbp && !boot_pxe) {
+		if (!file_lbp) {
 			close_on_exit blk_dev_fd = open_blk_fd(d.card_id, d.cpu_id);
 			if (!blk_dev_fd)
 				return false;
 
 			if (!check_blk_disk_exist(blk_dev_fd.fd, 0)) {
 				d.LOG_CPU_ERROR("Block device vcablk0 need be in inactive/active state!\n");
-				return false;
-			}
-		} else if (!file_lbp && boot_pxe) {
-			close_on_exit pxe_fd = open_pxe_fd(d.card_id, d.cpu_id);
-			if (!is_pxe_not_inactive(pxe_fd)) {
-				d.LOG_CPU_ERROR("PXE card is not activated!\n");
 				return false;
 			}
 		}
@@ -2332,13 +2318,8 @@ bool boot(caller_data d)
 
 		bool boot_res = false;
 		if (!file_lbp) {
-			if (boot_pxe) {
-				d.LOG_CPU(DEBUG_INFO, "TRYING TO BOOT VIA PXE!\n");
-				boot_res = try_ioctl_with_blk(cpu_fd, LBP_BOOT_VIA_PXE, d);
-			} else {
-				d.LOG_CPU(DEBUG_INFO, "TRYING TO BOOT VCABLK0!\n");
-				boot_res = try_ioctl_with_blk(cpu_fd, LBP_BOOT_BLKDISK, d);
-			}
+			d.LOG_CPU(DEBUG_INFO, "TRYING TO BOOT VCABLK0!\n");
+			boot_res = try_ioctl_with_blk(cpu_fd, LBP_BOOT_BLKDISK, d);
 		} else {
 			d.LOG_CPU(DEBUG_INFO, "TRYING TO BOOT LBP!\n");
 			boot_res = try_ioctl_with_img(cpu_fd, LBP_BOOT_RAMDISK, d, (void*)file_lbp, info.st_size);
@@ -2428,7 +2409,7 @@ bool pwrbtn_boot(caller_data d)
 
 	char actual_path[PATH_MAX + 1];
 
-	if (strcmp(img_path, BLOCKIO_BOOT_DEV_NAME) != 0 && strcmp(img_path, PXE_BOOT_DEV_NAME) != 0) {
+	if (strcmp(img_path, BLOCKIO_BOOT_DEV_NAME) != 0) {
 		if (!realpath(img_path, actual_path))
 			d.LOG_CPU_ERROR("Cannot canonicalize OS image path (got %s): %s!\n",
 				img_path, strerror(errno));
@@ -4730,98 +4711,6 @@ bool blockio_ctl(caller_data d)
 	return true;
 }
 
-bool pxe_ctl_enable(caller_data d)
-{
-	std::string devname = get_pxe_dev_name(d.card_id, d.cpu_id);
-
-	close_on_exit pxe_dev_fd = open_pxe_fd(d.card_id, d.cpu_id);
-	if (!pxe_dev_fd)
-		return false;
-
-	if (!is_pxe_exactly_inactive(pxe_dev_fd)) {
-		d.LOG_CPU_ERROR("PXE network card %s is not in \"inactive\" state.\n",
-				devname.c_str());
-		return false;
-	}
-
-	if (!pxe_enable(pxe_dev_fd)) {
-		d.LOG_CPU_ERROR("Cannot enable PXE network card %s!\n", devname.c_str());
-		return false;
-	} else return true;
-}
-
-bool pxe_ctl_disable(caller_data d)
-{
-	std::string devname = get_pxe_dev_name(d.card_id, d.cpu_id);
-
-	close_on_exit pxe_dev_fd = open_pxe_fd(d.card_id, d.cpu_id);
-	if (!pxe_dev_fd)
-		return false;
-
-	if (is_pxe_exactly_running(pxe_dev_fd)) {
-		d.LOG_CPU_ERROR("PXE network card %s is currently in use by the node! "
-				"Boot using other means and then try again.\n",
-				devname.c_str());
-		return false;
-	}
-
-	if (!is_pxe_exactly_active(pxe_dev_fd)) {
-		d.LOG_CPU_ERROR("PXE network card %s is not in \"active\" state.\n",
-				devname.c_str());
-		return false;
-	}
-
-	if (!pxe_disable(pxe_dev_fd)) {
-		d.LOG_CPU_ERROR("Cannot disable PXE network card %s!\n",
-				devname.c_str());
-		return false;
-	} else return true;
-}
-
-bool pxe_ctl_status(caller_data d)
-{
-	close_on_exit pxe_dev_fd = open_pxe_fd(d.card_id, d.cpu_id);
-	if (!pxe_dev_fd)
-		return false;
-
-	std::string devname = get_pxe_dev_name(d.card_id, d.cpu_id);
-	enum vcapxe_state state = get_pxe_state(pxe_dev_fd);
-	std::string state_str = stringify_pxe_state(state);
-
-	if (state < 0)
-	{
-		d.LOG_CPU_ERROR("Can't get PXE state for device %s.\n", devname.c_str());
-		return false;
-	} else {
-		printf("%s\t%s\n", devname.c_str(), state_str.c_str());
-		return true;
-	}
-}
-
-bool pxe_ctl(caller_data d)
-{
-	d.LOG_CPU(DEBUG_INFO, "Executing " PXE_CMD " %s command.\n", d.args.get_arg(SUBCMD).c_str());
-
-	if (d.args.get_arg(SUBCMD) == PXE_SUBCMD_ENABLE) {
-		if (!pxe_ctl_enable(d))
-			return false;
-	}
-	else if (d.args.get_arg(SUBCMD) == PXE_SUBCMD_DISABLE) {
-		if (!pxe_ctl_disable(d))
-			return false;
-	}
-	else if (d.args.get_arg(SUBCMD) == PXE_SUBCMD_STATUS) {
-		if (!pxe_ctl_status(d))
-			return false;
-	}
-	else {
-		d.LOG_CPU_ERROR("Wrong PXE subcommand!\n");
-		return false;
-	}
-
-	return true;
-}
-
 std::string get_card_gen(const unsigned card_id)
 {
 	enum vca_card_type card_type = get_card_type(card_id);
@@ -4875,11 +4764,6 @@ std::vector<std::string> get_subcmd_list(const char *_cmd)
 		subcommand_list.push_back(BLOCKIO_SUBCMD_LIST);
 		subcommand_list.push_back(BLOCKIO_SUBCMD_OPEN);
 		subcommand_list.push_back(BLOCKIO_SUBCMD_CLOSE);
-	}
-	else if (cmd == PXE_CMD) {
-		subcommand_list.push_back(PXE_SUBCMD_ENABLE);
-		subcommand_list.push_back(PXE_SUBCMD_DISABLE);
-		subcommand_list.push_back(PXE_SUBCMD_STATUS);
 	}
 	else if (cmd == GOLD_CMD) {
 		subcommand_list.push_back("on");
@@ -4935,11 +4819,6 @@ static inline subcmds *get_subcmds(const char *_cmd, const std::vector<std::stri
 		subcmd->add_subcmd(BLOCKIO_SUBCMD_LIST,		"list all blockio devices");
 		subcmd->add_subcmd(BLOCKIO_SUBCMD_OPEN,		"open/create blockio device");
 		subcmd->add_subcmd(BLOCKIO_SUBCMD_CLOSE,	"close blockio device");
-	}
-	else if (cmd == PXE_CMD) {
-			subcmd->add_subcmd(PXE_SUBCMD_ENABLE,		"enable PXE boot network card");
-			subcmd->add_subcmd(PXE_SUBCMD_DISABLE,		"disable PXE boot network card");
-			subcmd->add_subcmd(PXE_SUBCMD_STATUS,	"check PXE boot network card status");
 	}
 	else if (cmd == GOLD_CMD) {
 		subcmd->add_subcmd("on",			"boot golden bios");
@@ -5110,7 +4989,7 @@ parsing_output optional_file(const char *arg, args_holder & holder)
 	if (!strcmp(arg, FORCE_LAST_OS_IMAGE))
 		return NOT_PARSED;
 
-	if (!strcmp(BLOCKIO_BOOT_DEV_NAME, arg) || !strcmp(PXE_BOOT_DEV_NAME, arg)) {
+	if (!strcmp(BLOCKIO_BOOT_DEV_NAME, arg)) {
 		holder.add_arg(FILE_PATH_ARG, arg);
 		return PARSED;
 	}
@@ -5478,7 +5357,6 @@ static cmd_desc const commands_desc[] = {
     cmd_desc("help", new sequential_caller(help)),
     cmd_desc("blockio", new sequential_caller(blockio_ctl), get_subcmds("blockio"), requires_subcommand, optional_card_id, optional_cpu_id,
 						  optional_blockio_id, optional_blockio_type, optional_blockio_type_param),
-    cmd_desc("pxe", new sequential_caller(pxe_ctl), get_subcmds("pxe"), requires_subcommand, optional_card_id, optional_cpu_id),
     cmd_desc("os-shutdown", new sequential_caller(os_shutdown), optional_card_id, optional_cpu_id),
     cmd_desc("get-BIOS-cfg", new sequential_caller(get_bios_cfg), optional_card_id, optional_cpu_id, optional_bios_cfg_name),
     cmd_desc("set-BIOS-cfg", new threaded_caller(set_bios_cfg), optional_card_id, optional_cpu_id, requires_bios_cfg_name_and_value_pairs),

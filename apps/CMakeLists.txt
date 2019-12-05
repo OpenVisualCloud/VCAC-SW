@@ -47,7 +47,6 @@ set (vcactld_sources ${PROJECT_SOURCE_DIR}/src/daemon.cpp
 set (helper_sources ${PROJECT_SOURCE_DIR}/src/helper_funcs.cpp
                     ${PROJECT_SOURCE_DIR}/src/vca_config_parser.cpp
                     ${PROJECT_SOURCE_DIR}/src/vca_devices.cpp
-                    ${PROJECT_SOURCE_DIR}/src/vca_pxe.cpp
                     ${PROJECT_SOURCE_DIR}/src/vca_blockio_ctl.cpp)
 set (vcactl_headers ${PROJECT_SOURCE_DIR}/src/vcactrl.h
                     ${PROJECT_SOURCE_DIR}/src/log_args.h
@@ -60,7 +59,6 @@ set (helper_headers ${PROJECT_SOURCE_DIR}/src/helper_funcs.h
                     ${PROJECT_SOURCE_DIR}/src/vca_defs.h
                     ${PROJECT_SOURCE_DIR}/src/vca_config_parser.h
                     ${PROJECT_SOURCE_DIR}/src/vca_devices.h
-                    ${PROJECT_SOURCE_DIR}/src/vca_pxe.h
                     ${PROJECT_SOURCE_DIR}/src/vca_blockio_ctl.h)
 
 # adding OSAL (OS abstraction layer)
@@ -164,7 +162,6 @@ include_directories ("${MODULES_SRC}/vca/vca_mgr")
 include_directories ("${MODULES_SRC}/vca/vca_mgr_extd")
 include_directories ("${MODULES_SRC}/vca/vca_csm")
 include_directories ("${MODULES_SRC}/vca/blockio")
-include_directories ("${MODULES_SRC}/vca/pxe")
 include_directories ("${MODULES_SRC}/vca/vca_virtio/uapi")
 include_directories(${Boost_INCLUDE_DIRS})
 
