@@ -3,6 +3,11 @@
 - Build script and patches to build host kernel/module/app (CentOS 7.4)
 - Build scripts to build OS images for VCAC-A card (Ubuntu 16.04).
 
+# Documents
+Get the Release Notes and Software Installation guide for how to setup the VCAC-A card from links below:
+- [Release Notes](https://cdrdv2.intel.com/v1/dl/getContent/611358) 
+- [Software Installation Guide](https://cdrdv2.intel.com/v1/dl/getContent/611894)
+
 # Building
 ### Note: 
 > Detailed instruction is distributed via User Guide.
