@@ -12,6 +12,18 @@ This repository contains:
 * build scripts necessary to build binary artifacts;
 * scripts to build OS images for VCAC cards (both Linux and Windows images).
 
+## EEPROM and VCAgent files
+Please refer to User Guide for more information and usage suggestions.
+VCAC-R, normal EEPROM:
+https://openvisualcloud.github.io/VCAC-SW/eeprom/VCAC-R
+VCAC-R, DMA-disabled EEPROM:
+https://openvisualcloud.github.io/VCAC-SW/eeprom/VCAC-R/DMA_disabled
+VCAC-A, normal EEPROM:
+https://openvisualcloud.github.io/VCAC-SW/eeprom/VCAC-A
+VCA Agent:
+https://openvisualcloud.github.io/VCAC-SW/windows/vcagent
+
+
 ## Building
 Note: Detailed instruction is distributed via User Guide. (Especially for Windows images).
 
