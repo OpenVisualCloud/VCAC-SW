@@ -1,0 +1,436 @@
+# patches changing only .config file were removed, .config is distributed as separate file
+From 5045a0ec3860a767aecaffd3085ed98338584e72 Mon Sep 17 00:00:00 2001
+From: Przemek Komosa <przemyslawx.komosa@intel.com>
+Date: Mon, 27 Nov 2017 16:39:25 +0100
+Subject: [PATCH 1/7] Add VCA string and pkgver to kernel EXTRAVERSION
+
+---
+ Makefile | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 02edc5e7d32f..d89a6a2ad93e 100644
+--- a/Makefile
++++ b/Makefile
+@@ -1,8 +1,13 @@
+ VERSION = 3
+ PATCHLEVEL = 10
+ SUBLEVEL = 0
+-EXTRAVERSION =
+ NAME = Unicycling Gorilla
++
++ifndef RPMVERSION
++        RPMVERSION=0.0.0
++endif
++
++EXTRAVERSION = -1.$(RPMVERSION).VCA
+ RHEL_MAJOR = 7
+ RHEL_MINOR = 6
+ RHEL_RELEASE = 957.12.2
+-- 
+2.24.0
+
+
+From f00af68ebcfa3fd54f35a21d049f65e855c380ae Mon Sep 17 00:00:00 2001
+From: Michal Kulikowski <michal.kulikowski@intel.com>
+Date: Mon, 18 May 2015 15:48:58 -0400
+Subject: [PATCH 2/7] Added kernel-devel to compilation
+
+Signed-off-by: Michal Kulikowski <michal.kulikowski@intel.com>
+---
+ scripts/package/mkspec | 37 +++++++++++++++++++++++++++++++++++++
+ 1 file changed, 37 insertions(+)
+
+diff --git a/scripts/package/mkspec b/scripts/package/mkspec
+index fbbfd08853d3..e27589320168 100755
+--- a/scripts/package/mkspec
++++ b/scripts/package/mkspec
+@@ -59,6 +59,14 @@ echo "header files define structures and constants that are needed for"
+ echo "building most standard programs and are also needed for rebuilding the"
+ echo "glibc package."
+ echo ""
++echo "%package devel"
++echo "Summary: Development package for building kernel modules to match the $__KERNELRELEASE kernel"
++echo "Group: System Environment/Kernel"
++echo "AutoReqProv: no"
++echo "%description -n kernel-devel"
++echo "This package provides kernel headers and makefiles sufficient to build modules"
++echo "against the $__KERNELRELEASE kernel package."
++echo ""
+ 
+ if ! $PREBUILT; then
+ echo "%prep"
+@@ -81,8 +89,11 @@ echo "%else"
+ echo 'mkdir -p $RPM_BUILD_ROOT/boot $RPM_BUILD_ROOT/lib/modules'
+ echo 'mkdir -p $RPM_BUILD_ROOT/lib/firmware'
+ echo "%endif"
++echo 'mkdir -p $RPM_BUILD_ROOT'"/lib/firmware/$KERNELRELEASE"
+ 
+ echo 'INSTALL_MOD_PATH=$RPM_BUILD_ROOT make %{?_smp_mflags} KBUILD_SRC= modules_install'
++echo 'INSTALL_FW_PATH=$RPM_BUILD_ROOT'"/lib/firmware/$KERNELRELEASE"
++echo 'make INSTALL_FW_PATH=$INSTALL_FW_PATH' firmware_install
+ echo "%ifarch ia64"
+ echo 'cp $KBUILD_IMAGE $RPM_BUILD_ROOT'"/boot/efi/vmlinuz-$KERNELRELEASE"
+ echo 'ln -s '"efi/vmlinuz-$KERNELRELEASE" '$RPM_BUILD_ROOT'"/boot/"
+@@ -107,14 +118,34 @@ echo 'mv vmlinux.bz2 $RPM_BUILD_ROOT'"/boot/vmlinux-$KERNELRELEASE.bz2"
+ echo 'mv vmlinux.orig vmlinux'
+ echo "%endif"
+ 
++echo 'rm -f $RPM_BUILD_ROOT'"/lib/modules/$KERNELRELEASE/{build,source}"
++echo "mkdir -p "'$RPM_BUILD_ROOT'"/usr/src/kernels/$KERNELRELEASE"
++echo "EXCLUDES=\"$RCS_TAR_IGNORE --exclude .tmp_versions --exclude=*vmlinux* --exclude=*.o --exclude=*.ko --exclude=*.cmd --exclude=Documentation --exclude=firmware --exclude .config.old --exclude .missing-syscalls.d\""
++echo "tar "'$EXCLUDES'" -cf- . | (cd "'$RPM_BUILD_ROOT'"/usr/src/kernels/$KERNELRELEASE;tar xvf -)"
++echo 'cd $RPM_BUILD_ROOT'"/lib/modules/$KERNELRELEASE"
++echo "ln -sf /usr/src/kernels/$KERNELRELEASE build"
++echo "ln -sf /usr/src/kernels/$KERNELRELEASE source"
++
+ echo ""
+ echo "%clean"
+ echo 'rm -rf $RPM_BUILD_ROOT'
+ echo ""
++echo "%post"
++echo "if [ -x /sbin/installkernel -a -r /boot/vmlinuz-$KERNELRELEASE -a -r /boot/System.map-$KERNELRELEASE ]; then"
++echo "cp /boot/vmlinuz-$KERNELRELEASE /boot/vmlinuz-$KERNELRELEASE-rpm"
++echo "cp /boot/System.map-$KERNELRELEASE /boot/System.map-$KERNELRELEASE-rpm"
++echo "rm -f /boot/vmlinuz-$KERNELRELEASE /boot/System.map-$KERNELRELEASE"
++echo "/sbin/installkernel $KERNELRELEASE /boot/vmlinuz-$KERNELRELEASE-rpm /boot/System.map-$KERNELRELEASE-rpm"
++echo "rm -f /boot/vmlinuz-$KERNELRELEASE-rpm /boot/System.map-$KERNELRELEASE-rpm"
++echo "fi"
++echo ""
+ echo "%files"
+ echo '%defattr (-, root, root)'
+ echo "%dir /lib/modules"
+ echo "/lib/modules/$KERNELRELEASE"
++echo "%exclude /lib/modules/$KERNELRELEASE/build"
++echo "%exclude /lib/modules/$KERNELRELEASE/source"
++echo "/lib/firmware/$KERNELRELEASE"
+ echo "/lib/firmware"
+ echo "/boot/*"
+ echo ""
+@@ -122,3 +153,9 @@ echo "%files headers"
+ echo '%defattr (-, root, root)'
+ echo "/usr/include"
+ echo ""
++echo "%files devel"
++echo '%defattr (-, root, root)'
++echo "/usr/src/kernels/$KERNELRELEASE"
++echo "/lib/modules/$KERNELRELEASE/build"
++echo "/lib/modules/$KERNELRELEASE/source"
++echo ""
+-- 
+2.24.0
+
+
+From 1f529d7c65a71e30d8d601e0d7c4482b8e91615b Mon Sep 17 00:00:00 2001
+From: Michal Kulikowski <michal.kulikowski@intel.com>
+Date: Tue, 9 Jun 2015 15:29:52 +0200
+Subject: [PATCH 3/7] Fixed kernel to not install firmware in /lib/firmware/
+ directory
+
+Signed-off-by: Michal Kulikowski <michal.kulikowski@intel.com>
+---
+ scripts/package/mkspec | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/scripts/package/mkspec b/scripts/package/mkspec
+index e27589320168..99ca27040ea5 100755
+--- a/scripts/package/mkspec
++++ b/scripts/package/mkspec
+@@ -91,7 +91,7 @@ echo 'mkdir -p $RPM_BUILD_ROOT/lib/firmware'
+ echo "%endif"
+ echo 'mkdir -p $RPM_BUILD_ROOT'"/lib/firmware/$KERNELRELEASE"
+ 
+-echo 'INSTALL_MOD_PATH=$RPM_BUILD_ROOT make %{?_smp_mflags} KBUILD_SRC= modules_install'
++echo 'INSTALL_MOD_PATH=$RPM_BUILD_ROOT make %{?_smp_mflags} KBUILD_SRC= mod-fw= modules_install'
+ echo 'INSTALL_FW_PATH=$RPM_BUILD_ROOT'"/lib/firmware/$KERNELRELEASE"
+ echo 'make INSTALL_FW_PATH=$INSTALL_FW_PATH' firmware_install
+ echo "%ifarch ia64"
+@@ -146,7 +146,6 @@ echo "/lib/modules/$KERNELRELEASE"
+ echo "%exclude /lib/modules/$KERNELRELEASE/build"
+ echo "%exclude /lib/modules/$KERNELRELEASE/source"
+ echo "/lib/firmware/$KERNELRELEASE"
+-echo "/lib/firmware"
+ echo "/boot/*"
+ echo ""
+ echo "%files headers"
+-- 
+2.24.0
+
+
+From dc9c3ea51d0bc4143fdceb5a63f9ba181709f555 Mon Sep 17 00:00:00 2001
+From: Marcin Rysztowski <marcin.rysztowski@intel.com>
+Date: Thu, 2 Jul 2015 10:10:22 +0200
+Subject: [PATCH 4/7] =?UTF-8?q?Added=20compilation=20and=20linker=20flags,?=
+ =?UTF-8?q?=20required=20by=20SDL:=20-D=5FFORTIFY=5FSOURCE=3D2=20=E2=80=93?=
+ =?UTF-8?q?Wformat=20-z=20noexecstack=20-z=20relro=20-z=20now?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ Makefile | 7 ++++---
+ 1 file changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index d89a6a2ad93e..0d1173607fca 100644
+--- a/Makefile
++++ b/Makefile
+@@ -366,12 +366,13 @@ CHECK		= sparse
+ 
+ CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
+ 		  -Wbitwise -Wno-return-void $(CF)
+-CFLAGS_MODULE   =
++CFLAGS_MODULE   = -fstack-protector -D_FORTIFY_SOURCE=2 -Wformat
+ AFLAGS_MODULE   =
+-LDFLAGS_MODULE  =
+-CFLAGS_KERNEL	=
++LDFLAGS_MODULE  = -z noexecstack -z relro -z now
++CFLAGS_KERNEL	= -O2 -D_FORTIFY_SOURCE=2 -Wformat 
+ AFLAGS_KERNEL	=
+ CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
++LDFLAGS_vmlinux = -z noexecstack -z relro -z now
+ 
+ 
+ # Use USERINCLUDE when you must reference the UAPI directories only.
+-- 
+2.24.0
+
+
+From 107ac70a7b9d893477333c0fc26f55d5ec6b85bb Mon Sep 17 00:00:00 2001
+From: spawlows <slawomir.pawlowski@intel.com>
+Date: Fri, 21 Sep 2018 15:55:12 +0200
+Subject: [PATCH 5/7] IOMMU: Adding IOMMU aliases to PLX VCA and DMA on both
+ sides.
+
+---
+ drivers/pci/quirks.c | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/drivers/pci/quirks.c b/drivers/pci/quirks.c
+index 6a123dc287f4..bcef470a4220 100644
+--- a/drivers/pci/quirks.c
++++ b/drivers/pci/quirks.c
+@@ -3983,6 +3983,33 @@ static void quirk_mic_x200_dma_alias(struct pci_dev *pdev)
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2260, quirk_mic_x200_dma_alias);
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2264, quirk_mic_x200_dma_alias);
+ 
++
++/*
++ * VCA NTB forwards PCIe traffic using multiple alien RIDs. They have to
++ * be added as aliases to the DMA device in order to allow buffer access
++ * when IOMMU is enabled. Following devfns have to match RIT-LUT table
++ * programmed in the EEPROM.
++ */
++static void quirk_plx_vca_alias(struct pci_dev *pdev)
++{
++	const unsigned num_pci_slots = 0x20;
++	unsigned int slot;
++	for (slot = 0; slot < num_pci_slots; slot++) {
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x0));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x1));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x2));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x3));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot,0x4));
++	}
++}
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2954, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2955, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2956, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2958, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2959, quirk_plx_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x295A, quirk_plx_vca_alias);
++
++
+ /*
+  * Intersil/Techwell TW686[4589]-based video capture cards have an empty (zero)
+  * class code.  Fix it.
+-- 
+2.24.0
+
+
+From a15e2ca889e54656adbe7bfa4d1bb0b704c5f600 Mon Sep 17 00:00:00 2001
+From: Karol Maslowski <karol.maslowski@intel.com>
+Date: Tue, 29 Jan 2019 11:51:23 -0500
+Subject: [PATCH 6/7] Added default .config
+
+Signed-off-by: Karol Maslowski <karol.maslowski@intel.com>
+---
+ .config | 6142 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 6142 insertions(+)
+ create mode 100644 .config
+
+diff --git a/.config b/.config
+new file mode 100644
+index 000000000000..f78e726695d1
+-- 
+2.24.0
+
+
+From 9603fd8f81bd1d0bd733c70f8e1a799e2a3c12af Mon Sep 17 00:00:00 2001
+From: Alex Williamson <alex.williamson@redhat.com>
+Date: Mon, 24 Jun 2019 15:31:36 +0200
+Subject: [PATCH 7/7] Apply PCIe ACS override patch
+
+PCIe ACS (Access Control Services) is the PCIe 2.0+ feature that
+allows us to control whether transactions are allowed to be redirected
+in various subnodes of a PCIe topology.  For instance, if two
+endpoints are below a root port or downsteam switch port, the
+downstream port may optionally redirect transactions between the
+devices, bypassing upstream devices.  The same can happen internally
+on multifunction devices.  The transaction may never be visible to the
+upstream devices.
+
+One upstream device that we particularly care about is the IOMMU.  If
+a redirection occurs in the topology below the IOMMU, then the IOMMU
+cannot provide isolation between devices.  This is why the PCIe spec
+encourages topologies to include ACS support.  Without it, we have to
+assume peer-to-peer DMA within a hierarchy can bypass IOMMU isolation.
+
+Unfortunately, far too many topologies do not support ACS to make this
+a steadfast requirement.  Even the latest chipsets from Intel are only
+sporadically supporting ACS.  We have trouble getting interconnect
+vendors to include the PCIe spec required PCIe capability, let alone
+suggested features.
+
+Therefore, we need to add some flexibility.  The pcie_acs_override=
+boot option lets users opt-in specific devices or sets of devices to
+assume ACS support.  The "downstream" option assumes full ACS support
+on root ports and downstream switch ports.  The "multifunction"
+option assumes the subset of ACS features available on multifunction
+endpoints and upstream switch ports are supported.  The "id:nnnn:nnnn"
+option enables ACS support on devices matching the provided vendor
+and device IDs, allowing more strategic ACS overrides.  These options
+may be combined in any order.  A maximum of 16 id specific overrides
+are available.  It's suggested to use the most limited set of options
+necessary to avoid completely disabling ACS across the topology.
+
+Note to hardware vendors, we have facilities to permanently quirk
+specific devices which enforce isolation but not provide an ACS
+capability.  Please contact me to have your devices added and save
+your customers the hassle of this boot option.
+---
+ drivers/pci/quirks.c | 103 +++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 103 insertions(+)
+
+diff --git a/drivers/pci/quirks.c b/drivers/pci/quirks.c
+index bcef470a4220..85d5a4813841 100644
+--- a/drivers/pci/quirks.c
++++ b/drivers/pci/quirks.c
+@@ -4359,11 +4359,114 @@ static int pci_quirk_mf_endpoint_acs(struct pci_dev *dev, u16 acs_flags)
+ 	return acs_flags ? 0 : 1;
+ }
+ 
++static bool acs_on_downstream;
++static bool acs_on_multifunction;
++
++#define NUM_ACS_IDS 16
++struct acs_on_id {
++	unsigned short vendor;
++	unsigned short device;
++};
++static struct acs_on_id acs_on_ids[NUM_ACS_IDS];
++static u8 max_acs_id;
++
++static __init int pcie_acs_override_setup(char *p)
++{
++	if (!p)
++		return -EINVAL;
++
++	while (*p) {
++		if (!strncmp(p, "downstream", 10))
++			acs_on_downstream = true;
++		if (!strncmp(p, "multifunction", 13))
++			acs_on_multifunction = true;
++		if (!strncmp(p, "id:", 3)) {
++			char opt[5];
++			int ret;
++			long val;
++
++			if (max_acs_id >= NUM_ACS_IDS - 1) {
++				pr_warn("Out of PCIe ACS override slots (%d)\n",
++					NUM_ACS_IDS);
++				goto next;
++			}
++
++			p += 3;
++			snprintf(opt, 5, "%s", p);
++			ret = kstrtol(opt, 16, &val);
++			if (ret) {
++				pr_warn("PCIe ACS ID parse error %d\n", ret);
++				goto next;
++			}
++			acs_on_ids[max_acs_id].vendor = val;
++
++			p += strcspn(p, ":");
++			if (*p != ':') {
++				pr_warn("PCIe ACS invalid ID\n");
++				goto next;
++			}
++
++			p++;
++			snprintf(opt, 5, "%s", p);
++			ret = kstrtol(opt, 16, &val);
++			if (ret) {
++				pr_warn("PCIe ACS ID parse error %d\n", ret);
++				goto next;
++			}
++			acs_on_ids[max_acs_id].device = val;
++			max_acs_id++;
++		}
++next:
++		p += strcspn(p, ",");
++		if (*p == ',')
++			p++;
++	}
++
++	if (acs_on_downstream || acs_on_multifunction || max_acs_id)
++		pr_warn("Warning: PCIe ACS overrides enabled; This may allow non-IOMMU protected peer-to-peer DMA\n");
++
++	return 0;
++}
++early_param("pcie_acs_override", pcie_acs_override_setup);
++
++static int pcie_acs_overrides(struct pci_dev *dev, u16 acs_flags)
++{
++	int i;
++
++	/* Never override ACS for legacy devices or devices with ACS caps */
++	if (!pci_is_pcie(dev) ||
++	    pci_find_ext_capability(dev, PCI_EXT_CAP_ID_ACS))
++		return -ENOTTY;
++
++	for (i = 0; i < max_acs_id; i++)
++		if (acs_on_ids[i].vendor == dev->vendor &&
++		    acs_on_ids[i].device == dev->device)
++			return 1;
++
++	switch (pci_pcie_type(dev)) {
++	case PCI_EXP_TYPE_DOWNSTREAM:
++	case PCI_EXP_TYPE_ROOT_PORT:
++		if (acs_on_downstream)
++			return 1;
++		break;
++	case PCI_EXP_TYPE_ENDPOINT:
++	case PCI_EXP_TYPE_UPSTREAM:
++	case PCI_EXP_TYPE_LEG_END:
++	case PCI_EXP_TYPE_RC_END:
++		if (acs_on_multifunction && dev->multifunction)
++			return 1;
++	}
++
++	return -ENOTTY;
++}
++
+ static const struct pci_dev_acs_enabled {
+ 	u16 vendor;
+ 	u16 device;
+ 	int (*acs_enabled)(struct pci_dev *dev, u16 acs_flags);
+ } pci_dev_acs_enabled[] = {
++	/* PCI ACS OVERRIDE */
++ 	{ PCI_ANY_ID, PCI_ANY_ID, pcie_acs_overrides },
+ 	{ PCI_VENDOR_ID_ATI, 0x4385, pci_quirk_amd_sb_acs },
+ 	{ PCI_VENDOR_ID_ATI, 0x439c, pci_quirk_amd_sb_acs },
+ 	{ PCI_VENDOR_ID_ATI, 0x4383, pci_quirk_amd_sb_acs },
+-- 
+2.24.0
+
