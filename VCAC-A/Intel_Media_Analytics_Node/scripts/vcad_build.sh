@@ -615,22 +615,7 @@ install_vcad() {
 	echo "cd /root/package" >> install_package_in_image.sh
 	echo "pip install numpy-*.whl" >> install_package_in_image.sh
 	echo "pip install opencv_python-*.whl" >> install_package_in_image.sh
-	echo '#install ko' >> install_package_in_image.sh
-	echo 'install_hddl_package()' >> install_package_in_image.sh
-	echo '{' >> install_package_in_image.sh
-	echo "	cd /opt/intel/openvino_${OPENVNO_DATE}/deployment_tools/inference_engine/external/hddl/drivers/drv_ion " >> install_package_in_image.sh
-	echo '	make && make install' >> install_package_in_image.sh
-	echo '	if [ $? != 0 ];then' >> install_package_in_image.sh
-	echo '		echo "[Error] fail to install drv_ion"' >> install_package_in_image.sh
-	echo '	fi' >> install_package_in_image.sh
-	echo "	cd /opt/intel/openvino_${OPENVNO_DATE}/deployment_tools/inference_engine/external/hddl/drivers/drv_vsc " >> install_package_in_image.sh
-	echo '	make && make install' >> install_package_in_image.sh
-	echo '	if [ $? != 0 ];then' >> install_package_in_image.sh
-	echo '		echo "[Error] fail to install drv_ion"' >> install_package_in_image.sh
-	echo '	fi' >> install_package_in_image.sh
-		
-	echo '}' >> install_package_in_image.sh
-	#inctall ffpeg
+	#install ffmpeg
 	echo 'install_ffmpeg()' >> install_package_in_image.sh
 	echo '{' >> install_package_in_image.sh
 	echo '	cd /root/package' >> install_package_in_image.sh
@@ -684,14 +669,14 @@ install_vcad() {
 	echo '			exit 1' >> install_package_in_image.sh
 	echo '		fi' >> install_package_in_image.sh
 	echo '	fi' >> install_package_in_image.sh
-	
 	echo '	bash install.sh --ignore-signature --cli-mode -s silent.cfg' >> install_package_in_image.sh
-	
-	echo '	install_hddl_package'>> install_package_in_image.sh
 	echo '	install_mss' >> install_package_in_image.sh
 	echo 'fi'>> install_package_in_image.sh
-	echo "echo '@reboot ( /sbin/modprobe i2c-i801 )' >> /opt/intel/vcaa/vcaa_agent.cron" >> install_package_in_image.sh
-	echo "echo '@reboot ( /sbin/modprobe i2c-dev )' >> /opt/intel/vcaa/vcaa_agent.cron	" >> install_package_in_image.sh
+        echo '/sbin/modprobe i2c-i801 >> .profile' >> install_package_in_image.sh
+        echo '/sbin/modprobe i2c-dev >> .profile' >> install_package_in_image.sh
+        echo '/sbin/modprobe myd_vsc >> .profile' >> install_package_in_image.sh
+        echo '/sbin/modprobe myd_ion >> .profile' >> install_package_in_image.sh
+        echo 'rm -rf /root/package'  >> install_package_in_image.sh
 	chmod +x install_package_in_image.sh || die "Failed to chmod +x install_package_in_image.sh" 
 	_copy "install_package_in_image.sh" "${_ROOT_PKG_PATH}/install_package_in_image.sh"
 
@@ -701,12 +686,8 @@ install_vcad() {
 	umount ${_MOUNT_PATH}/dev/ || die "Failed to umount dev"
 	umount ${_MOUNT_PATH} || die "Failed to umount vcad image"
 	rm -rf ${_MOUNT_PATH} || die "Failed to remove ${_MOUNT_PATH}"
-	
-
 	_cd "${_VCAD_INSTALL_PATH}"
 	gzip -v vca_disk*.vcad || die "Failed to compress vcad archive"
-
-
 	debug ${INITIAL_DEBUG_LEVEL} "-- install_vcad"
 }
 
