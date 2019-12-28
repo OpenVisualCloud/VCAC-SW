@@ -672,10 +672,10 @@ install_vcad() {
 	echo '	bash install.sh --ignore-signature --cli-mode -s silent.cfg' >> install_package_in_image.sh
 	echo '	install_mss' >> install_package_in_image.sh
 	echo 'fi'>> install_package_in_image.sh
-        echo '/sbin/modprobe i2c-i801 >> .profile' >> install_package_in_image.sh
-        echo '/sbin/modprobe i2c-dev >> .profile' >> install_package_in_image.sh
-        echo '/sbin/modprobe myd_vsc >> .profile' >> install_package_in_image.sh
-        echo '/sbin/modprobe myd_ion >> .profile' >> install_package_in_image.sh
+        echo 'echo "/sbin/modprobe i2c-i801" >> .profile' >> install_package_in_image.sh
+        echo 'echo "/sbin/modprobe i2c-dev" >> .profile' >> install_package_in_image.sh
+        echo 'echo "/sbin/modprobe myd_vsc" >> .profile' >> install_package_in_image.sh
+        echo 'echo "/sbin/modprobe myd_ion" >> .profile' >> install_package_in_image.sh
         echo 'rm -rf /root/package'  >> install_package_in_image.sh
 	chmod +x install_package_in_image.sh || die "Failed to chmod +x install_package_in_image.sh" 
 	_copy "install_package_in_image.sh" "${_ROOT_PKG_PATH}/install_package_in_image.sh"
