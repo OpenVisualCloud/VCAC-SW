@@ -666,16 +666,15 @@ install_vcad() {
 	echo '		sed -i "s/$accept_eula/ACCEPT_EULA=accept/" silent.cfg' >> install_package_in_image.sh
 	echo '		if [ $? != 0 ];then' >> install_package_in_image.sh
 	echo '			echo "[Error] fail to set the value of accept_eula to accept " ' >> install_package_in_image.sh
-	echo '			exit 1' >> install_package_in_image.sh
 	echo '		fi' >> install_package_in_image.sh
 	echo '	fi' >> install_package_in_image.sh
 	echo '	bash install.sh --ignore-signature --cli-mode -s silent.cfg' >> install_package_in_image.sh
 	echo '	install_mss' >> install_package_in_image.sh
 	echo 'fi'>> install_package_in_image.sh
-        echo 'echo "/sbin/modprobe i2c-i801" >> .profile' >> install_package_in_image.sh
-        echo 'echo "/sbin/modprobe i2c-dev" >> .profile' >> install_package_in_image.sh
-        echo 'echo "/sbin/modprobe myd_vsc" >> .profile' >> install_package_in_image.sh
-        echo 'echo "/sbin/modprobe myd_ion" >> .profile' >> install_package_in_image.sh
+        echo 'echo "/sbin/modprobe i2c-i801" >> /root/.profile' >> install_package_in_image.sh
+        echo 'echo "/sbin/modprobe i2c-dev" >> /root/.profile' >> install_package_in_image.sh
+        echo 'echo "/sbin/modprobe myd_vsc" >> /root/.profile' >> install_package_in_image.sh
+        echo 'echo "/sbin/modprobe myd_ion" >> /root/.profile' >> install_package_in_image.sh
         echo 'rm -rf /root/package'  >> install_package_in_image.sh
 	chmod +x install_package_in_image.sh || die "Failed to chmod +x install_package_in_image.sh" 
 	_copy "install_package_in_image.sh" "${_ROOT_PKG_PATH}/install_package_in_image.sh"
