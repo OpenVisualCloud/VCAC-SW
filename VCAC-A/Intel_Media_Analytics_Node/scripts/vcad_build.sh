@@ -42,8 +42,6 @@ readonly OPENVNO_DATE="2019.3.334"
 readonly OPENVNO_NAME="l_openvino_toolkit_p_$OPENVNO_DATE.tgz"
 readonly OPENVNO_LINK="http://registrationcenter-download.intel.com/akdlm/irc_nas/15944/${OPENVNO_NAME}"
 
-readonly PYTHON_NAME="Python-3.7.2.tgz"
-readonly PYTHON_VER_LINK="https://www.python.org/ftp/python/3.7.2/${PYTHON_NAME}"
 readonly KERNEL_PATCH_ARCHIVE="${TAR_DIR}/ubuntu16.04_kernel4.19_patch.tar.gz"
 readonly MODULES_PATCH_ARCHIVE="${TAR_DIR}/vcass-modules-4.19-patch.tar.gz"
 
@@ -63,14 +61,11 @@ readonly MODULES_SRC_ARCHIVE="${MODULES_SRC_NAME}.tar.gz"
 
 readonly INITIAL_DEBUG_LEVEL=1
 
-#readonly MODULES_BUILD_SCRIPT_PATH="${SCRIPT_DIR}/build_scripts/quickbuild/generate_modules.sh"
 readonly MODULES_BUILD_SCRIPT_PATH="./generate_modules.sh"
 
 readonly DEFAULT_TASKS_TO_RUN="build,package,install"
 
-#readonly ADDITONAL_BINARY_NAME="skl_dmc_ver1_27.bin"
 readonly ADDITONAL_BINARY_NAME="kbl_dmc_ver1_04.bin"
-#readonly ADDITONAL_BINARY_LINK="https://cgit.freedesktop.org/drm/drm-firmware/tree/i915/${ADDITONAL_BINARY_NAME}"
 readonly ADDITONAL_BINARY_LINK="https://cgit.freedesktop.org/drm/drm-firmware/tree/i915/${ADDITONAL_BINARY_NAME}"
 
 readonly NUMPY_NAME="numpy-1.16.4-cp27-cp27mu-manylinux1_x86_64.whl"
@@ -458,19 +453,18 @@ build_kernel_and_modules() {
 	rm -rf ${_KERNEL_DIR}/*.tar.gz || die "Failed to remove *.tar.gz kernel files"
 	rm -rf ${_KERNEL_DIR}/*.dsc || die "Failed to remove *.dsc kernel files"
 	rm -rf ${_KERNEL_DIR}/*.deb || die "Failed to remove *.deb kernel files"
-
+         
 	# build kernel
 	_cd "${_KERNEL_DIR}/${KERNEL_SRC_NAME}"
 	local _COMMIT_ID_KERNEL=$(git rev-parse --short HEAD)
 	[ -z "${_COMMIT_ID_KERNEL}" ] && die "Failed to get kernel commit id"
 	make x86_64_vcxa_defconfig
-	OS="UBUNTU" PKGVERSION=${_COMMIT_ID_KERNEL} make -j`nproc` deb-pkg || die "Failed to build kernel"
+        OS="UBUNTU" PKGVERSION=${_COMMIT_ID_KERNEL} make -j`nproc` deb-pkg || die "Failed to build kernel"
 	dpkg -i ${_KERNEL_DIR}/linux-headers-${KERNEL_VERSION}*.deb || die "Failed to install kernel headers"
+        
 
 	# remove previous built files
 	local _MODULES_OUTPUT_DIR="${_VCAA_KERNEL_DIR}/output"
-#	rm -rf ${_MODULES_DIR}/*.tar.gz || die "Failed to remove *.tar.gz module files"
-#	rm -rf ${_MODULES_DIR}/*.deb || die "Failed to remove *.deb module files"
 	rm -rf ${_MODULES_OUTPUT_DIR}/*.tar.gz || die "Failed to remove *.tar.gz module files"
 	rm -rf ${_MODULES_OUTPUT_DIR}/*.deb || die "Failed to remove *.deb module files"
 
@@ -478,16 +472,12 @@ build_kernel_and_modules() {
 	_cd ${_MODULES_DIR}
 	local _COMMIT_ID_MODULES=$(git rev-parse --short HEAD)
 	[ -z "${_COMMIT_ID_MODULES}" ] && die "Failed to get modules commit id"
-#	OS="UBUNTU" PKG_VER=1.${_COMMIT_ID_MODULES} KERNEL_NAME=${KERNEL_VERSION}-1.${_COMMIT_ID_KERNEL}.vca+ \
-#		KERNEL_PATH="${_KERNEL_DIR}/${KERNEL_SRC_NAME}" ${MODULES_BUILD_SCRIPT_PATH} || die "Failed to build modules"
 	KERNEL_HEADER_PKG=""
 	_find_most_recent_kernel_devel "${_KERNEL_DIR}" "linux-headers-${KERNEL_VERSION}*_amd64.deb"
 	OS=UBUNTU PKG_VER=2.1.1 LINUX_HEADERS_OR_KERNEL_DEVEL_PKG=${KERNEL_HEADER_PKG} ${MODULES_BUILD_SCRIPT_PATH} || die "Failed to build modules"
 	rm -rf vca_mod || die "Failed to remove vca_mod dir"
 	dpkg -X ${_MODULES_DIR}/output/vcass-modules*_amd64.deb vca_mod || die "Failed to extract modules deb"
 	dpkg -e ${_MODULES_DIR}/output/vcass-modules*_amd64.deb vca_mod/DEBIAN/ || die "Failed to extract modules control info"
-	#dpkg -X ${_MODULES_OUTPUT_DIR}/vcass-modules*_amd64.deb vca_mod || die "Failed to extract modules deb"
-	#dpkg -e ${_MODULES_OUTPUT_DIR}/vcass-modules*_amd64.deb vca_mod/DEBIAN/ || die "Failed to extract modules control info"
 	rm -rf vca_mod/lib/modules/*/modules.* || die "Failed to remove modules files"
 	dpkg -b vca_mod ./ || die "Failed to build modules deb"
 
@@ -526,10 +516,8 @@ build_vcad() {
 
 	# copy build scripts
 	_copy -r "${SCRIPT_DIR}/build_scripts" "${_IMAGE_BUILD_PATH}"
-
 	# download additional binary
 	_create_dir "${_ADDITIONAL_BIN_DIR}/i915"
-	#_download "${ADDITONAL_BINARY_LINK}" "${_ADDITIONAL_BIN_DIR}/${ADDITONAL_BINARY_NAME}" "${ADDITONAL_BINARY_NAME}"
         _download "${ADDITONAL_BINARY_LINK}" "${_ADDITIONAL_BIN_DIR}/i915/${ADDITONAL_BINARY_NAME}" "${ADDITONAL_BINARY_NAME}"
 	echo "${ADDITONAL_BINARY_NAME}\n\tfirmware with performance fix for kvmgt\n\tfrom: https://cgit.freedesktop.org/drm/drm-firmware/tree/i915" > "${_ADDITIONAL_BIN_DIR}/content.txt"
 
@@ -541,7 +529,7 @@ build_vcad() {
 	[ -z "${_COMMIT_ID_KERNEL}" ] && die "Failed to get kernel commit id"
 
 	_cd ${_BUILD_SCRIPTS_DIR}
-	local _KERNEL_NAME=${KERNEL_VER}-1.${_COMMIT_ID_KERNEL}.vca+
+        local _KERNEL_NAME=${KERNEL_VER}-1.${_COMMIT_ID_KERNEL}.vca+
 	local _OS_VERSION="16.04"
 	local _BUILD_ID=1
 	sudo -E ${_BUILD_SCRIPTS_DIR}/build_ubuntu_vcad.sh -d ${_OS_VERSION} -s ${SET_SIZE} -o /tmp/a -k ${_KERNEL_NAME} \
@@ -576,6 +564,7 @@ install_vcad() {
 			_copy -rf ${_PKG_FILE} "${_ROOT_PKG_PATH}/"
 		fi
 	done
+        if [ ${SET_OPT} != "BASIC" ];then
 	_copy ${_VCAD_REPKG_PATH}/linux-headers*.deb "${_ROOT_PKG_PATH}/"
 	_copy ${_VCAD_REPKG_PATH}/linux-image*.deb "${_ROOT_PKG_PATH}/"
 
@@ -606,86 +595,91 @@ install_vcad() {
 
 	# generate install script
 	_cd ${BUILD_DIR}
-	echo "#!/bin/bash" > install_package_in_image.sh
-	echo "opt=${SET_OPT}" >> install_package_in_image.sh
-	echo "export LC_ALL=C" >> install_package_in_image.sh
-	echo "apt-get update && apt-get install -y libjson-c2 cmake libelf-dev libpython2.7 libboost-filesystem1.58 nasm libboost-thread1.58 libboost-program-options1.58 libusb-dev cron python-pip build-essential curl wget libssl-dev ca-certificates git libboost-all-dev gcc-multilib g++-multilib libgtk2.0-dev pkg-config libpng12-dev libcairo2-dev libpango1.0-dev libglib2.0-dev libgstreamer0.10-dev libusb-1.0-0-dev i2c-tools libgstreamer-plugins-base1.0-dev libavformat-dev libavcodec-dev libswscale-dev libgstreamer1.0-dev libusb-1.0-0-dev i2c-tools libjson-c-dev usbutils ocl-icd-libopencl*  ocl-icd-opencl-dev libsm6-dbg/xenial libxrender-dev/xenial" >>install_package_in_image.sh
-	
-	echo "cd /root/package" >> install_package_in_image.sh
-	echo "pip install numpy-*.whl" >> install_package_in_image.sh
-	echo "pip install opencv_python-*.whl" >> install_package_in_image.sh
-	#install ffmpeg
-	echo 'install_ffmpeg()' >> install_package_in_image.sh
-	echo '{' >> install_package_in_image.sh
-	echo '	cd /root/package' >> install_package_in_image.sh
-	echo '	cd FFmpeg' >> install_package_in_image.sh
-	echo '  git checkout -b 4.2 origin/release/4.2'	 >> install_package_in_image.sh
-	echo '	apt install nasm' >> install_package_in_image.sh
-	echo '	./configure --disable-lzma --enable-shared --disable-static' >> install_package_in_image.sh
-	echo '	make -j `nproc`' >> install_package_in_image.sh
-	echo '  make install' >> install_package_in_image.sh 
-	echo "	apt-get install -y lockfile-progs ffmpeg" >> install_package_in_image.sh
-	echo '  cd ..' >> install_package_in_image.sh
-	echo '  rm -rf FFmpeg' >> install_package_in_image.sh
-	echo "}" >> install_package_in_image.sh
-	echo '#install mss_ocl' >> install_package_in_image.sh
-	echo 'install_mss()' >> install_package_in_image.sh
-	echo '{' >> install_package_in_image.sh
-	echo '	cd /root/package' >> install_package_in_image.sh
-	echo '	tar zxf MediaServerStudioEssentials2019R1HF2_16.9_10018.tar.gz' >> install_package_in_image.sh
-        echo '  if [ $? != 0 ];then' >> install_package_in_image.sh
-        echo '    echo "failed to tar msdk."' >> install_package_in_image.sh
-        echo '  fi' >> install_package_in_image.sh
-	echo '	cd MediaServerStudioEssentials2019R1HF*' >> install_package_in_image.sh
-	echo '	tar -zxvf intel-linux-media*.tar.gz' >> install_package_in_image.sh
-	echo '	cd intel-linux-media*' >> install_package_in_image.sh
-	echo '	echo y | bash install_media.sh' >> install_package_in_image.sh
-        echo '  if [ $? != 0 ];then' >> install_package_in_image.sh
-        echo '    echo "failed to install mss."' >> install_package_in_image.sh
-        echo '  fi'  >> install_package_in_image.sh
-		
-	echo '}' >> install_package_in_image.sh
-	echo 'if [ $opt == "IPS" ];then' >> install_package_in_image.sh
-	echo '	 cd /root/package/deb' >> install_package_in_image.sh
-	echo '	 dpkg -i intel-vcaa*.deb' >> install_package_in_image.sh
-	echo '	 install_ffmpeg' >> install_package_in_image.sh
-	echo '	 install_mss' >> install_package_in_image.sh
-			echo 'fi'>> install_package_in_image.sh
-	echo '#install openvino' >> install_package_in_image.sh
-    echo 'install_openvino()' >> install_package_in_image.sh
-	echo '{' >> install_package_in_image.sh
-    echo '  rm -rf /opt/' >> install_package_in_image.sh
-	echo '  cd /root/package' >> install_package_in_image.sh 
-	echo '	tar -zxf l_openvino_toolkit_p_2019.3.334.tgz' >> install_package_in_image.sh
-	echo '	cd l_openvino_toolkit_p_2019.3.334' >> install_package_in_image.sh
-	echo '  ./install_openvino_dependencies.sh' >> install_package_in_image.sh 
-	echo '	accept_eula=`cat silent.cfg |grep ACCEPT_EULA=`' >> install_package_in_image.sh
-	echo '	accept_eula_name=${accept_eula#*=}' >> install_package_in_image.sh
-	echo '	if [ "$accept_eula_name" != "accept" ];then' >> install_package_in_image.sh
-	echo '		sed -i "s/$accept_eula/ACCEPT_EULA=accept/" silent.cfg' >> install_package_in_image.sh
-	echo '		if [ $? != 0 ];then' >> install_package_in_image.sh
-	echo '			echo "[Error] fail to set the value of accept_eula to accept " ' >> install_package_in_image.sh
-	echo '		fi' >> install_package_in_image.sh
-	echo '	fi' >> install_package_in_image.sh
-	
-	echo '	bash install.sh --ignore-signature --cli-mode -s silent.cfg' >> install_package_in_image.sh
-	echo '}' >> install_package_in_image.sh
-	echo 'if [ $opt == "EXTENDED" ];then' >> install_package_in_image.sh
-	echo '  install_openvino' >> install_package_in_image.sh
-	echo '	install_mss' >> install_package_in_image.sh
-	echo '	cd /root/package/deb' >> install_package_in_image.sh
-	echo '	dpkg -i intel-vcaa-ddwo*.deb' >> install_package_in_image.sh
-	echo '	install_ffmpeg' >> install_package_in_image.sh
-	echo 'fi'>> install_package_in_image.sh
-	echo 'if [ $opt == "FULL" ];then' >> install_package_in_image.sh
-	echo '  install_openvino' >> install_package_in_image.sh
-	echo '	install_mss' >> install_package_in_image.sh
-	echo 'fi'>> install_package_in_image.sh
-        echo 'echo "/sbin/modprobe i2c-i801" >> /root/.profile' >> install_package_in_image.sh
-        echo 'echo "/sbin/modprobe i2c-dev" >> /root/.profile' >> install_package_in_image.sh
-        echo 'echo "/sbin/modprobe myd_vsc" >> /root/.profile' >> install_package_in_image.sh
-        echo 'echo "/sbin/modprobe myd_ion" >> /root/.profile' >> install_package_in_image.sh
-        echo 'rm -rf /root/package'  >> install_package_in_image.sh
+	cat > install_package_in_image.sh <<EOF 
+#!/bin/bash
+opt=${SET_OPT}
+export LC_ALL=C
+apt-get update && apt-get install -y libjson-c2 cmake libelf-dev libpython2.7 libboost-filesystem1.58 nasm libboost-thread1.58 libboost-program-options1.58 libusb-dev cron python-pip build-essential curl wget libssl-dev ca-certificates git libboost-all-dev gcc-multilib g++-multilib libgtk2.0-dev pkg-config libpng12-dev libcairo2-dev libpango1.0-dev libglib2.0-dev libgstreamer0.10-dev libusb-1.0-0-dev i2c-tools libgstreamer-plugins-base1.0-dev libavformat-dev libavcodec-dev libswscale-dev libgstreamer1.0-dev libusb-1.0-0-dev i2c-tools libjson-c-dev usbutils ocl-icd-libopencl*  ocl-icd-opencl-dev libsm6-dbg/xenial libxrender-dev/xenial
+cd /root/package
+pip install numpy-*.whl
+pip install opencv_python-*.whl
+install_ffmpeg()
+{
+  cd /root/package
+  cd FFmpeg
+  git checkout -b 4.2 origin/release/4.2
+  apt install nasm
+  ./configure --disable-lzma --enable-shared --disable-static
+  make -j\`nproc\`
+  make install
+  apt-get install -y lockfile-progs ffmpeg
+  cd ..
+  rm -rf FFmpeg
+}
+#install mss_ocl
+install_mss()
+{
+  cd /root/package
+  tar zxf MediaServerStudioEssentials2019R1HF2_16.9_10018.tar.gz
+  if [ \$? != 0 ];then
+	echo "failed to tar msdk."
+  fi
+  cd MediaServerStudioEssentials2019R1HF*
+  tar -zxvf intel-linux-media*.tar.gz
+  cd intel-linux-media*
+  echo y | bash install_media.sh
+  if [ \$? != 0 ];then
+	echo "failed to install mss."
+  fi
+}
+if [ \$opt == "IPS" ];then
+   cd /root/package/deb
+   dpkg -i intel-vcaa*.deb
+   install_ffmpeg
+   install_mss
+fi
+#install openvino
+install_openvino()
+{
+   rm -rf /opt/
+   cd /root/package
+   tar -zxf l_openvino_toolkit_p_2019.3.334.tgz
+   cd l_openvino_toolkit_p_2019.3.334
+   ./install_openvino_dependencies.sh
+   accept_eula=\`cat silent.cfg |grep ACCEPT_EULA=\`
+   accept_eula_name=\${accept_eula#*=}
+   if [ "\$accept_eula_name" != "accept" ];then
+      sed -i "s/\$accept_eula/ACCEPT_EULA=accept/" silent.cfg
+      if [ \$? != 0 ];then
+         echo "[Error] fail to set the value of accept_eula to accept " 
+      fi
+   fi
+   bash install.sh --ignore-signature --cli-mode -s silent.cfg
+}
+if [ \$opt == "EXTENDED" ];then
+   install_openvino
+   install_mss
+   cd /root/package/deb
+   dpkg -i intel-vcaa-ddwo*.deb
+   install_ffmpeg
+fi
+if [ \$opt == "FULL" ];then
+   install_openvino
+   install_mss
+fi
+echo "/sbin/modprobe i2c-i801" >> /root/.profile
+echo "/sbin/modprobe i2c-dev" >> /root/.profile
+echo "/sbin/modprobe myd_vsc" >> /root/.profile
+echo "/sbin/modprobe myd_ion" >> /root/.profile
+rm -rf /root/package
+EOF
+       fi
+        if [ ${SET_OPT} == "BASIC" ];then
+          _cd ${BUILD_DIR}
+          echo "#!/bin/bash" >install_package_in_image.sh
+          echo "apt update && apt -y install dbus" >> install_package_in_image.sh
+       fi
+
 	chmod +x install_package_in_image.sh || die "Failed to chmod +x install_package_in_image.sh" 
 	_copy "install_package_in_image.sh" "${_ROOT_PKG_PATH}/install_package_in_image.sh"
 
@@ -744,12 +738,7 @@ vcad_build() {
 				elif [ "${_TASK}" == "package" ]; then
 					build_vcad
  				elif [ "${_TASK}" == "install" ]; then
-				 	if [ ${SET_OPT} == "IPS" -o  ${SET_OPT} == "FULL" -o ${SET_OPT} == "EXTENDED" ];then
-						install_vcad
-					fi
-                                        if [ ${SET_OPT} == "BASIC" ];then
-                                            echo "build basic image."
-                                        fi
+				        install_vcad
 				fi
 			done
 		fi
@@ -761,5 +750,6 @@ vcad_build() {
 
 stderr "Called as: $0 $*"
 vcad_build "$@" && stderr "Finished: $0 $*"
+
 
 
