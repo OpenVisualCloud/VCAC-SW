@@ -35,22 +35,22 @@ readonly DEFAULT_SIZE=48
 
 readonly FFMPEG_NAME="FFmpeg"
 
-readonly MSS_OCL_NAME="MediaServerStudioEssentials2019R1HF2_16.9_10018.tar.gz"
+readonly MSS_OCL_NAME="MediaServerStudioEssentials2019R1HF3_16.9_10020.tar.gz"
 readonly MSS_OCL_LINK="https://github.com/Intel-Media-SDK/MediaSDK/releases/download/MSS-KBL-2019-R1-HF1/${MSS_OCL_NAME}"
 
-readonly OPENVNO_DATE="2019.3.334"
+readonly OPENVNO_DATE="2020.1.023"
 readonly OPENVNO_NAME="l_openvino_toolkit_p_$OPENVNO_DATE.tgz"
-readonly OPENVNO_LINK="http://registrationcenter-download.intel.com/akdlm/irc_nas/15944/${OPENVNO_NAME}"
+readonly OPENVNO_LINK="http://registrationcenter-download.intel.com/akdlm/irc_nas/16345/${OPENVNO_NAME}"
 
-readonly KERNEL_PATCH_ARCHIVE="${TAR_DIR}/ubuntu16.04_kernel4.19_patch.tar.gz"
+readonly KERNEL_PATCH_ARCHIVE="${TAR_DIR}/k4.19.87_patch.tar.gz"
 readonly MODULES_PATCH_ARCHIVE="${TAR_DIR}/vcass-modules-4.19-patch.tar.gz"
 
-readonly VCAA_DOCKER_NAME="vcaa/ubuntu-16.04-test"
+readonly VCAA_DOCKER_NAME="vcaa/ubuntu-18.04-test"
 readonly VCAA_DOCKER_VERSION="1.0"
 
 readonly KERNEL_VERSION="4.19"
-readonly KERNEL_VER="4.19.0"
-readonly KERNEL_SRC_NAME="linux-${KERNEL_VERSION}"
+readonly KERNEL_VER="4.19.87"
+readonly KERNEL_SRC_NAME="linux-${KERNEL_VER}"
 readonly KERNEL_SRC_ARCHIVE="${KERNEL_SRC_NAME}.tar.gz"
 readonly KERNEL_SRC_LINK="https://mirrors.edge.kernel.org/pub/linux/kernel/v4.x/${KERNEL_SRC_ARCHIVE}"
 
@@ -68,11 +68,10 @@ readonly DEFAULT_TASKS_TO_RUN="build,package,install"
 readonly ADDITONAL_BINARY_NAME="kbl_dmc_ver1_04.bin"
 readonly ADDITONAL_BINARY_LINK="https://cgit.freedesktop.org/drm/drm-firmware/tree/i915/${ADDITONAL_BINARY_NAME}"
 
-readonly NUMPY_NAME="numpy-1.16.4-cp27-cp27mu-manylinux1_x86_64.whl"
-readonly NUMPY_LINK="https://files.pythonhosted.org/packages/1f/c7/198496417c9c2f6226616cff7dedf2115a4f4d0276613bab842ec8ac1e23/${NUMPY_NAME}"
-readonly OPENCV_NAME="opencv_python-4.1.0.25-cp27-cp27mu-manylinux1_x86_64.whl"
-readonly OPENVN_LINK="https://files.pythonhosted.org/packages/77/30/36c3f0644fa9f42d92f079b972e990a5874c1fc2b2c0e9656eb88bb8d6dc/${OPENCV_NAME}"
-
+readonly OPENCV_NAME="opencv_python-4.1.2.30-cp36-cp36m-manylinux1_x86_64.whl" 
+readonly OPENVN_LINK="https://files.pythonhosted.org/packages/c0/a9/9828dfaf93f40e190ebfb292141df6b7ea1a2d57b46263e757f52be8589f/${OPENCV_NAME}"
+readonly NUMPY_NAME="numpy-1.18.1-cp36-cp36m-manylinux1_x86_64.whl"
+readonly NUMPY_LINK="https://files.pythonhosted.org/packages/62/20/4d43e141b5bc426ba38274933ef8e76e85c7adea2c321ecf9ebf7421cedf/${NUMPY_NAME}"
 # Globals
 BUILD_DIR=${DEFAULT_BUILD_DIR}
 SET_SIZE=${DEFAULT_SIZE}
@@ -458,9 +457,13 @@ build_kernel_and_modules() {
 	_cd "${_KERNEL_DIR}/${KERNEL_SRC_NAME}"
 	local _COMMIT_ID_KERNEL=$(git rev-parse --short HEAD)
 	[ -z "${_COMMIT_ID_KERNEL}" ] && die "Failed to get kernel commit id"
+        grep_config=`cat arch/x86/configs/x86_64_vcxa_defconfig |grep CONFIG_RETPOLINE=y`
+        if [ ${grep_config} == "" ];then
+           echo "CONFIG_RETPOLINE=y" >> arch/x86/configs/x86_64_vcxa_defconfig
+        fi
 	make x86_64_vcxa_defconfig
-        OS="UBUNTU" PKGVERSION=${_COMMIT_ID_KERNEL} make -j`nproc` deb-pkg || die "Failed to build kernel"
-	dpkg -i ${_KERNEL_DIR}/linux-headers-${KERNEL_VERSION}*.deb || die "Failed to install kernel headers"
+	OS="UBUNTU" PKGVERSION=${_COMMIT_ID_KERNEL} make -j`nproc` deb-pkg || die "Failed to build kernel"
+	dpkg -i ${_KERNEL_DIR}/linux-headers-*.deb || die "Failed to install kernel headers"
         
 
 	# remove previous built files
@@ -529,8 +532,8 @@ build_vcad() {
 	[ -z "${_COMMIT_ID_KERNEL}" ] && die "Failed to get kernel commit id"
 
 	_cd ${_BUILD_SCRIPTS_DIR}
-        local _KERNEL_NAME=${KERNEL_VER}-1.${_COMMIT_ID_KERNEL}.vca+
-	local _OS_VERSION="16.04"
+	local _KERNEL_NAME=${KERNEL_VER}-1.${_COMMIT_ID_KERNEL}.vca+
+	local _OS_VERSION="18.04"
 	local _BUILD_ID=1
 	sudo -E ${_BUILD_SCRIPTS_DIR}/build_ubuntu_vcad.sh -d ${_OS_VERSION} -s ${SET_SIZE} -o /tmp/a -k ${_KERNEL_NAME} \
 		-t bootstrap -p 1.0.${_BUILD_ID} || die "Failed to build vcad file"
@@ -556,7 +559,7 @@ install_vcad() {
 	mount -o loop,offset=$((616448 * 512)) vca_disk*.vcad ${_MOUNT_PATH} || die "Failed to mount vcad image"
 	mount --bind /dev ${_MOUNT_PATH}/dev/ || die "Failed to mount dev"
 	mount --bind /proc ${_MOUNT_PATH}/proc/ || die "Failed to mount proc"
-
+        
 	# copy packages
 	_create_dir "${_ROOT_PKG_PATH}"
 	for _PKG_FILE in ${ROOT_DIR}/* ; do
@@ -573,6 +576,7 @@ install_vcad() {
 	_download "${OPENVN_LINK}" "${_DOWNLOAD_DIR}/${OPENCV_NAME}" "${OPENCV_NAME}"
 	_copy "${_DOWNLOAD_DIR}/${NUMPY_NAME}" "${_ROOT_PKG_PATH}/${NUMPY_NAME}"
 	_copy "${_DOWNLOAD_DIR}/${OPENCV_NAME}" "${_ROOT_PKG_PATH}/${OPENCV_NAME}"
+
 
 	if [ ${SET_OPT} == "FULL" -o ${SET_OPT} == "EXTENDED" ];then
 		#download openvino
@@ -599,10 +603,13 @@ install_vcad() {
 #!/bin/bash
 opt=${SET_OPT}
 export LC_ALL=C
-apt-get update && apt-get install -y libjson-c2 cmake libelf-dev libpython2.7 libboost-filesystem1.58 nasm libboost-thread1.58 libboost-program-options1.58 libusb-dev cron python-pip build-essential curl wget libssl-dev ca-certificates git libboost-all-dev gcc-multilib g++-multilib libgtk2.0-dev pkg-config libpng12-dev libcairo2-dev libpango1.0-dev libglib2.0-dev libgstreamer0.10-dev libusb-1.0-0-dev i2c-tools libgstreamer-plugins-base1.0-dev libavformat-dev libavcodec-dev libswscale-dev libgstreamer1.0-dev libusb-1.0-0-dev i2c-tools libjson-c-dev usbutils ocl-icd-libopencl*  ocl-icd-opencl-dev libsm6-dbg/xenial libxrender-dev/xenial
+apt-get update && apt-get install -y libjson-c3 libboost-program-options1.65-dev libboost-thread1.65 libboost-filesystem1.65 libusb-dev cron python3-pip build-essential curl wget libssl-dev ca-certificates git libboost-all-dev gcc-multilib g++-multilib libgtk2.0-dev pkg-config libpng-dev libcairo2-dev libpango1.0-dev libglib2.0-dev libusb-1.0-0-dev i2c-tools libgstreamer-plugins-base1.0-dev libavformat-dev libavcodec-dev libswscale-dev libgstreamer1.0-dev  libusb-1.0-0-dev i2c-tools libjson-c-dev usbutils ocl-icd-libopencl*  ocl-icd-opencl-dev libsm-dev libxrender-dev libavfilter-dev tzdata
+
+rm -rf /usr/bin/python && cd /usr/bin && ln -s python3.6 python
+
 cd /root/package
-pip install numpy-*.whl
-pip install opencv_python-*.whl
+pip3 install numpy-*.whl
+pip3 install opencv_python-*.whl
 install_ffmpeg()
 {
   cd /root/package
@@ -620,13 +627,13 @@ install_ffmpeg()
 install_mss()
 {
   cd /root/package
-  tar zxf MediaServerStudioEssentials2019R1HF2_16.9_10018.tar.gz
+  tar zxf MediaServerStudioEssentials2019R1HF3_16.9_10020.tar.gz
   if [ \$? != 0 ];then
 	echo "failed to tar msdk."
   fi
-  cd MediaServerStudioEssentials2019R1HF*
+  cd MediaServerStudioEssentials2019R1HF3_16.9_10020
   tar -zxvf intel-linux-media*.tar.gz
-  cd intel-linux-media*
+  cd intel-linux-media-16.9-10020/
   echo y | bash install_media.sh
   if [ \$? != 0 ];then
 	echo "failed to install mss."
@@ -643,8 +650,8 @@ install_openvino()
 {
    rm -rf /opt/
    cd /root/package
-   tar -zxf l_openvino_toolkit_p_2019.3.334.tgz
-   cd l_openvino_toolkit_p_2019.3.334
+   tar -zxf ${OPENVNO_NAME}
+   cd l_openvino_toolkit_p_2020.1.023
    ./install_openvino_dependencies.sh
    accept_eula=\`cat silent.cfg |grep ACCEPT_EULA=\`
    accept_eula_name=\${accept_eula#*=}
@@ -655,6 +662,8 @@ install_openvino()
       fi
    fi
    bash install.sh --ignore-signature --cli-mode -s silent.cfg
+   cd /opt/intel/openvino_2020.1.023/install_dependencies
+   ./install_NEO_OCL_driver.sh
 }
 if [ \$opt == "EXTENDED" ];then
    install_openvino
@@ -667,23 +676,58 @@ if [ \$opt == "FULL" ];then
    install_openvino
    install_mss
 fi
+#NFD
+gen_nfd_file()
+{
+    mkdir -p /opt/intel/openvino/k8s-nfd/
+    cd /opt/intel/openvino/k8s-nfd/
+    echo "node.vcaa.nfd/vcaa_myriadx_nums=12" > nfd-vca-features
+    echo "node.vcaa.nfd/vcaa_nn_TOPs=8.4" >> nfd-vca-features
+    echo "node.vcaa.nfd/vcaa_vpu_memory_in_MB=512" >> nfd-vca-features
+    echo "node.vcaa.nfd/vcaa_system_memory_in_GB=8" >> nfd-vca-features
+    echo "node.vcaa.nfd/vcaa_hw_h264_codec=true" >> nfd-vca-features
+    echo "node.vcaa.nfd/vcaa_hw_h265_codec=true" >> nfd-vca-features
+    echo "node.vcaa.nfd/vcaa_hw_jpeg_codec=true" >> nfd-vca-features
+    echo "node.vcaa.nfd/vcaa_gpu_freq_in_MHz=1150" >> nfd-vca-features
+    echo "node.vcaa.nfd/vcaa_gpu_memory_in_MB=256" >> nfd-vca-features
+
+}
+gen_nfd_file
 echo "/sbin/modprobe i2c-i801" >> /root/.profile
 echo "/sbin/modprobe i2c-dev" >> /root/.profile
 echo "/sbin/modprobe myd_vsc" >> /root/.profile
 echo "/sbin/modprobe myd_ion" >> /root/.profile
 rm -rf /root/package
 EOF
-       fi
-        if [ ${SET_OPT} == "BASIC" ];then
-          _cd ${BUILD_DIR}
-          echo "#!/bin/bash" >install_package_in_image.sh
-          echo "apt update && apt -y install dbus" >> install_package_in_image.sh
-       fi
 
+       fi
+       if [ ${SET_OPT} == "BASIC" ];then
+          _cd ${BUILD_DIR}
+     cat > install_package_in_image.sh <<EOF
+
+#!/bin/bash
+apt update && apt -y install dbus
+mkdir -p /opt/intel/openvino/k8s-nfd/
+cd /opt/intel/openvino/k8s-nfd/
+echo "node.vcaa.nfd/vcaa_myriadx_nums=12" > nfd-vca-features
+echo "node.vcaa.nfd/vcaa_nn_TOPs=8.4" >> nfd-vca-features
+echo "node.vcaa.nfd/vcaa_vpu_memory_in_MB=512" >> nfd-vca-features
+echo "node.vcaa.nfd/vcaa_system_memory_in_GB=8" >> nfd-vca-features
+echo "node.vcaa.nfd/vcaa_hw_h264_codec=true" >> nfd-vca-features
+echo "node.vcaa.nfd/vcaa_hw_h265_codec=true" >> nfd-vca-features
+echo "node.vcaa.nfd/vcaa_hw_jpeg_codec=true" >> nfd-vca-features
+echo "node.vcaa.nfd/vcaa_gpu_freq_in_MHz=1150" >> nfd-vca-features
+echo "node.vcaa.nfd/vcaa_gpu_memory_in_MB=256" >> nfd-vca-features
+
+
+EOF
+       fi
+ 
 	chmod +x install_package_in_image.sh || die "Failed to chmod +x install_package_in_image.sh" 
 	_copy "install_package_in_image.sh" "${_ROOT_PKG_PATH}/install_package_in_image.sh"
 
 	chroot ${_MOUNT_PATH} /root/package/install_package_in_image.sh
+
 
 	umount ${_MOUNT_PATH}/proc/ || die "Failed to umount proc"
 	umount ${_MOUNT_PATH}/dev/ || die "Failed to umount dev"
@@ -734,11 +778,11 @@ vcad_build() {
 			local _TASKS=${TASKS_TO_RUN//,/ }
 			for _TASK in ${_TASKS}; do
 				if [ "${_TASK}" == "build" ]; then
-					build_kernel_and_modules
+				       build_kernel_and_modules
 				elif [ "${_TASK}" == "package" ]; then
 					build_vcad
  				elif [ "${_TASK}" == "install" ]; then
-				        install_vcad
+                                         install_vcad
 				fi
 			done
 		fi

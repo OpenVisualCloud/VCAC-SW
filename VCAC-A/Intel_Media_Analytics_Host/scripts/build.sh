@@ -437,7 +437,6 @@ build_kernel_and_modules() {
 	# apply modules patch
 	[ ${NO_CLEAN} -eq 0 ] && _extract_tgz "${MODULES_PATCH_ARCHIVE}" "${_MODULES_PATCH_DIR}"
 	[ ${NO_CLEAN} -eq 0 ] && _apply_patch_git "${_MODULES_DIR}" "${_MODULES_PATCH_DIR}" "${MODULES_SRC_NAME}"
-
 	# build kernel
 	rm -rf ${_HOST_PKG_DIR}/kernel*.rpm || die "Failed to remove previous kernel rpms"
 
@@ -463,7 +462,7 @@ build_kernel_and_modules() {
 
 	_copy /root/rpmbuild/SRPMS/vcass-modules*.rpm ${_HOST_PKG_DIR}
 	_copy /root/rpmbuild/RPMS/x86_64/vcass-modules*.rpm ${_HOST_PKG_DIR}
-
+        
 	debug ${DEBUG_LEVEL} "-- build_kernel_and_modules"
 }
 
@@ -481,26 +480,8 @@ build_vcaa_daemon() {
 	local _PATCH_DIR="${_VCAA_KERNEL_DIR}/patch"
 	local _DAEMON_PATCH_DIR="${_PATCH_DIR}/daemon"
 	[[ ! -d "${_DAEMON_PATCH_DIR}" || ${NO_CLEAN} -eq 0 ]] && _create_dir "${_DAEMON_PATCH_DIR}"
-	
-	
-	
-	
-	
-	
-	#[[ ! -d "${_DAEMON_DIR}" || ${NO_CLEAN} -eq 0 ]] && _create_dir "${_DAEMON_DIR}"
-	#[[ ! -d "${_HOST_PKG_DIR}" || ${NO_CLEAN} -eq 0 ]] && _create_dir "${_HOST_PKG_DIR}"
-	#[[ ! -d "${_VCAA_KERNEL_DIR}" || ${NO_CLEAN} -eq 0 ]] && _create_dir "${_VCAA_KERNEL_DIR}"
-	#[[ ! -d "${_DOWNLOAD_DIR}" || ${NO_CLEAN} -eq 0 ]] && _create_dir "${_DOWNLOAD_DIR}"
-	#[[ ! -d "${_DOWNLOAD_DIR_VCA}" || ${NO_CLEAN} -eq 0 ]] && _create_dir "${_DOWNLOAD_DIR_VCA}"
-	#[[ ! -d "${_MODULES_DIR}" || ${NO_CLEAN} -eq 0 ]] && _create_dir "${_MODULES_DIR}"
-	#local _PATCH_DIR="${_VCAA_KERNEL_DIR}/patch"
-	#local _DAEMON_PATCH_DIR="${_PATCH_DIR}/daemon"
-	#[[ ! -d "${_DAEMON_PATCH_DIR}" || ${NO_CLEAN} -eq 0 ]] && _create_dir "${_DAEMON_PATCH_DIR}"
 
 	[[ ! -f "${_DOWNLOAD_DIR}/${BOOST_NAME}.tar.gz" || ${NO_CLEAN} -eq 0 ]] && _download "${BOOST_LINK}" "${_DOWNLOAD_DIR}/${BOOST_NAME}.tar.gz" "${BOOST_NAME}.tar.gz"
-	# _extract_tgz "${_DOWNLOAD_DIR}/${BOOST_NAME}.tar.gz" "${_DAEMON_DIR}"
-	#_cd ${_DOWNLOAD_DIR}
-        #cd ${_DOWNLOAD_DIR}
 	_extract_tgz "${_DOWNLOAD_DIR}/${BOOST_NAME}.tar.gz" "${_DAEMON_DIR}"
 	_cd ${_DAEMON_DIR}/${BOOST_NAME}
 	./bootstrap.sh
@@ -510,16 +491,11 @@ build_vcaa_daemon() {
 	# download and extract modules source
 	[[ ! -f "${_DOWNLOAD_DIR}/${VCA_SRC_ARCHIVE}" || ${NO_CLEAN} -eq 0 ]] && _download "${VCA_SRC_LINK}" "${_DOWNLOAD_DIR}/${VCA_SRC_ARCHIVE}" "${VCA_SRC_ARCHIVE}"
 	 
-       # cd ${_DOWNLOAD_DIR}
-       # tar -zxvf ${VCA_SRC_ARCHIVE}
 	_extract_tgz "${_DOWNLOAD_DIR}/${VCA_SRC_ARCHIVE}" "${_DOWNLOAD_DIR}"
-	#[ ${NO_CLEAN} -eq 0 ] && _extract_tgz "${_DOWNLOAD_DIR}/${VCA_SRC_ARCHIVE}" "${_DAEMON_DIR}"
 	_cd ${_DOWNLOAD_DIR}/VCAC-SW-VCAC-A_R2/apps
 	BOOST_ROOT=${_DAEMON_DIR}/${BOOST_NAME} OS=CENTOS WORKSPACE=/tmp/tmp-test PKG_VER=2.7.3 MODULES_SRC=../modules/ ${_DOWNLOAD_DIR}/VCAC-SW-VCAC-A_R2/apps/generate_apps.sh
 	_copy /tmp/tmp-test/daemon-vca*.rpm ${_HOST_PKG_DIR}
 
-	#_copy /root/rpmbuild/SRPMS/daemon-vca*.rpm ${_HOST_PKG_DIR}
-	#_copy /root/rpmbuild/RPMS/x86_64/daemon-vca*.rpm ${_HOST_PKG_DIR}
 
 	debug ${DEBUG_LEVEL} "-- build_vcaa_daemon"
 }
