@@ -437,6 +437,7 @@ build_kernel_and_modules() {
 	# apply modules patch
 	[ ${NO_CLEAN} -eq 0 ] && _extract_tgz "${MODULES_PATCH_ARCHIVE}" "${_MODULES_PATCH_DIR}"
 	[ ${NO_CLEAN} -eq 0 ] && _apply_patch_git "${_MODULES_DIR}" "${_MODULES_PATCH_DIR}" "${MODULES_SRC_NAME}"
+
 	# build kernel
 	rm -rf ${_HOST_PKG_DIR}/kernel*.rpm || die "Failed to remove previous kernel rpms"
 
@@ -462,7 +463,7 @@ build_kernel_and_modules() {
 
 	_copy /root/rpmbuild/SRPMS/vcass-modules*.rpm ${_HOST_PKG_DIR}
 	_copy /root/rpmbuild/RPMS/x86_64/vcass-modules*.rpm ${_HOST_PKG_DIR}
-        
+
 	debug ${DEBUG_LEVEL} "-- build_kernel_and_modules"
 }
 
@@ -495,7 +496,6 @@ build_vcaa_daemon() {
 	_cd ${_DOWNLOAD_DIR}/VCAC-SW-VCAC-A_R2/apps
 	BOOST_ROOT=${_DAEMON_DIR}/${BOOST_NAME} OS=CENTOS WORKSPACE=/tmp/tmp-test PKG_VER=2.7.3 MODULES_SRC=../modules/ ${_DOWNLOAD_DIR}/VCAC-SW-VCAC-A_R2/apps/generate_apps.sh
 	_copy /tmp/tmp-test/daemon-vca*.rpm ${_HOST_PKG_DIR}
-
 
 	debug ${DEBUG_LEVEL} "-- build_vcaa_daemon"
 }

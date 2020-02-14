@@ -42,7 +42,7 @@ readonly OPENVNO_DATE="2020.1.023"
 readonly OPENVNO_NAME="l_openvino_toolkit_p_$OPENVNO_DATE.tgz"
 readonly OPENVNO_LINK="http://registrationcenter-download.intel.com/akdlm/irc_nas/16345/${OPENVNO_NAME}"
 
-readonly KERNEL_PATCH_ARCHIVE="${TAR_DIR}/k4.19.87_patch.tar.gz"
+readonly KERNEL_PATCH_ARCHIVE="${TAR_DIR}/ubuntu18.04_kernel4.19.87_patch.tar.gz"
 readonly MODULES_PATCH_ARCHIVE="${TAR_DIR}/vcass-modules-4.19-patch.tar.gz"
 
 readonly VCAA_DOCKER_NAME="vcaa/ubuntu-18.04-test"
