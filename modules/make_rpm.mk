@@ -41,6 +41,7 @@ rpmbuild_flags += -E '%define kversion $(KERNEL_VERSION)'
 rpmbuild_flags += -E '%define usecurrentkernel $(USE_CURRENT_KERNEL)'
 rpmclean_flags = $(rpmbuild_flags) --clean --rmsource --rmspec
 rpmbuild_flags += -E '%define _version $(version)'
+rpmbuild_flags += --define 'debug_package %{nil}'
 
 include make.spec
 

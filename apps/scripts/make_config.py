@@ -1,4 +1,4 @@
-#!/bin/python
+#!/usr/bin/env python2
 #
 # Intel VCA Software Stack (VCASS)
 #

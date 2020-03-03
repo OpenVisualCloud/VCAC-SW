@@ -3,6 +3,8 @@
 #include "vca_mgr_extd_ioctl.h"
 #include "vca_csm_ioctl.h"
 
+#include <dirent.h>
+
 unsigned get_cards_num() {
 	unsigned cnt = 0;
 	for (unsigned j = 0; j < MAX_CARDS; ++j) {

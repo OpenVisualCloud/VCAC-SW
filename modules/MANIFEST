@@ -129,6 +129,7 @@ Kbuild
 make_rpm.mk
 COPYING
 Makefile
+generate_modules.sh
 scripts/vca_config
 scripts/vca_eth_cfg.sh
 scripts/vca_setup.sh

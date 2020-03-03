@@ -2,7 +2,7 @@
 #
 # Intel VCA Software Stack (VCASS)
 #
-# Copyright(c) 2015 Intel Corporation.
+# Copyright(c) 2015-2020 Intel Corporation.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2, as
@@ -19,8 +19,7 @@
 # Intel VCA Scripts.
 #
 
-export PATH=$PATH:/sbin
-export PATH=$PATH:/bin
+export PATH="$PATH:/sbin:/bin"
 
 start()
 {
@@ -30,13 +29,13 @@ start()
 stop()
 {
 	vcactl os-shutdown || :
-	VCACTRLD_PID=`pidof vcactld`
+	VCACTRLD_PID=$(pidof /usr/sbin/vcactld) || return
 	kill -s SIGTERM $VCACTRLD_PID
 }
 
 scan_for_devices()
 {
-	VCACTRLD_PID=`pidof vcactld`
+	VCACTRLD_PID=$(pidof -s /usr/sbin/vcactld)
 	if [ -p /var/run/vcactld ] && [ -n "${VCACTRLD_PID}" ]
 	then
 		logger "[VCA] Daemon ready with pid ${VCACTRLD_PID}"

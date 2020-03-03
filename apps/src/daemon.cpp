@@ -18,7 +18,6 @@
  * Intel VCA User Space Tools.
  */
 
-#include "helper_funcs.h"
 #include <dirent.h>
 #include <sys/poll.h>
 #include <sys/eventfd.h>
@@ -721,10 +720,44 @@ int main(int argc, char *argv[])
 	pthread_mutex_init(&scan_for_devices_lock, NULL);
 	pthread_mutex_init(&reload_config_lock, NULL);
 
+	auto grp = get_vcausers_group_id();
+	if (grp == -1) {
+		vcasslog("Cannot find group 'vcausers'!\n");
+		exit(-1);
+	}
 	logfp = fopen(LOGFILE_NAME, "a+");
 	if (!logfp) {
 		fprintf(stderr, "cannot open logfile '%s', continuing anyway\n", LOGFILE_NAME);
 	}
+
+	rc = chown(LOGFILE_NAME, -1, grp);
+	interpret_error_code(rc, "chown(LOGFILE_NAME): %s\n");
+
+	rc = chmod(LOGFILE_NAME, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH);
+	interpret_error_code(rc, "chmod(LOGFILE_NAME): %s\n");
+
+
+	/* use this lock as semaphore to block potential scan_for_devices()
+	 * execution until initialization is done.
+	 * unlock is called in fifo_mgr() */
+	rc = pthread_mutex_lock(&scan_for_devices_lock);
+	if (rc != 0) {
+		vcasslog("pthread_mutex_lock failed in function main()"
+			" with error message: %s\n", strerror(rc));
+		exit(2);
+	}
+
+	if (signal(SIGUSR2, handle_SIGUSR2) == SIG_ERR)
+		vcasslog("Can't register handler for SIGUSR2");
+	if (signal(SIGTERM, handle_SIGTERM) == SIG_ERR)
+		vcasslog("Can't register handler for SIGTERM");
+
+	/* create fresh fifo message file */
+	unlink(MSG_FIFO_FILE);
+	rc = mkfifo(MSG_FIFO_FILE, 0660);
+	interpret_error_code(rc, "mkfifo " MSG_FIFO_FILE " error: %s! Exiting...\n");
+	rc = chown(MSG_FIFO_FILE, -1, grp);
+	interpret_error_code(rc, "chown(MSG_FIFO_FILE): %s\n");
 
 	switch (fork()) {
 	case 0:
@@ -741,24 +774,6 @@ int main(int argc, char *argv[])
 		vcasslog("Vcactl deamon process already running!\n");
 		exit(EBUSY);
 	}
-
-	rc = change_group_and_mode(LOGFILE_NAME);
-	if (rc == -1)
-		exit(0);
-
-	unlink(MSG_FIFO_FILE);
-
-	/* create fifo message file */
-	rc = mkfifo(MSG_FIFO_FILE, 0666);
-	interpret_error_code(rc, "mkfifo " MSG_FIFO_FILE " error: %s! Exiting...\n");
-
-	rc = change_group_and_mode(MSG_FIFO_FILE);
-	if (rc == FAIL)
-		exit(-1);
-
-	/* create named mutex */
-	if (!vca_named_mutex_create(VCACTL_CONFIG_NAMED_MTX_NAME))
-		exit(EBUSY);
 
 	if (!load_config())
 		exit(-1);
@@ -786,11 +801,6 @@ int main(int argc, char *argv[])
 
 	/* enable communication with daemon using named fifo */
 	run_mgrs();
-
-	if (signal(SIGTERM, handle_SIGTERM) == SIG_ERR)
-		vcasslog("Can't catch SIGTERM");
-	if (signal(SIGUSR2, handle_SIGUSR2) == SIG_ERR)
-		vcasslog("Can't catch SIGUSR2");
 
 	/* in case daemon was killed and run again */
 	scan_for_devices();

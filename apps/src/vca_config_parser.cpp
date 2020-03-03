@@ -1,7 +1,7 @@
 /*
  * Intel VCA Software Stack (VCASS)
  *
- * Copyright(c) 2015-2017 Intel Corporation.
+ * Copyright(c) 2015-2020 Intel Corporation.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2, as
@@ -19,14 +19,14 @@
  */
 
 #include <string.h>
+#include <sys/file.h>
+#include <grp.h>
 
 #include <boost/foreach.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/property_tree/detail/xml_parser_write.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/detail/xml_parser_error.hpp>
-#include <boost/interprocess/sync/named_mutex.hpp>
-#include <boost/interprocess/sync/scoped_lock.hpp>
 
 #include "vca_config_parser.h"
 #include "helper_funcs.h"
@@ -163,7 +163,7 @@ bool vca_config::load_vca_xml(boost::property_tree::ptree &root)
 	try {
 		read_xml(filename, root, xml_parser::trim_whitespace);
 	}
-	catch (xml_parser_error ex) {
+	catch (xml_parser_error &ex) {
 		LOG_ERROR("Cannot parse xml file %s: %s!\n", filename.c_str(), ex.what());
 		return false;
 	}
@@ -171,7 +171,7 @@ bool vca_config::load_vca_xml(boost::property_tree::ptree &root)
 	try {
 		root = root.get_child(VCA_CONFIG_HEADER);
 	}
-	catch (ptree_bad_path ex) {
+	catch (ptree_bad_path &ex) {
 		LOG_ERROR("%s is not a valid VCA CONFIGURATION FILE!\n", filename.c_str());
 		return false;
 	}
@@ -200,13 +200,16 @@ bool vca_config::save_vca_xml(boost::property_tree::ptree &pt)
 	try {
 		xml_parser::write_xml(filename_tmp, tree, std::locale(), w);
 	}
-	catch (xml_parser_error ex) {
+	catch (xml_parser_error &ex) {
 		LOG_ERROR("Cannot write file %s as XML file: %s!\n", filename_tmp.c_str(), ex.what());
 		return false;
 	}
 
-	if (FAIL == rename(filename_tmp.c_str(), filename.c_str())) {
-		LOG_ERROR("Cannot rename files - old: %s, new: %s: %s\n",
+	auto grp = getgrnam("vcausers");
+	if (FAIL == rename(filename_tmp.c_str(), filename.c_str()) ||
+	    FAIL == chown(filename.c_str(), (uid_t)-1, grp->gr_gid ) ||
+	    FAIL == chmod(filename.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) ) {
+		LOG_ERROR("Cannot rename files or change their ownership/permissions - old: %s, new: %s: %s\n",
 			filename_tmp.c_str(), filename.c_str(), strerror(errno));
 		LOG_WARN("VCA configuration file has not been changed since the last operation.\n");
 		return false;
@@ -219,10 +222,14 @@ bool vca_config::save_global_field(const char *field_name, const char *field_val
 {
 	using namespace boost::property_tree;
 
-	boost::interprocess::named_mutex sem(boost::interprocess::open_only_t(), VCACTL_CONFIG_NAMED_MTX_NAME);
-	boost::interprocess::scoped_lock <boost::interprocess::named_mutex> lock(sem, get_timeout(VCACTL_CONFIG_NAMED_MTX_TIMEOUT));
-	if (!lock)
-		throw vca_mutex_timeout(VCACTL_SHM_PATH VCACTL_CONFIG_NAMED_MTX_NAME);
+	close_on_exit fd(open(VCA_CONFIG_LOCK_FILE, O_RDWR));
+	if (!fd)
+		return false;
+	for (time_t now = time(NULL); flock(fd, LOCK_EX|LOCK_NB); sleep(0.2))
+		if (time(NULL) - now > VCA_CONFIG_LOCK_TIMEOUT) {
+			LOG_WARN("Cannot access config.xml - different process locks the file\n");
+			return false;
+		}
 
 	if (!load_vca_xml(root))
 		return false;
@@ -235,7 +242,7 @@ bool vca_config::save_global_field(const char *field_name, const char *field_val
 				}
 		}
 	}
-	catch (ptree_bad_path ex) {
+	catch (ptree_bad_path &ex) {
 		LOG_ERROR("save_global_field: cannot parse xml file %s: %s!\n", filename.c_str(), ex.what());
 		return false;
 	}
@@ -249,10 +256,15 @@ bool vca_config::save_global_field(const char *field_name, const char *field_val
 bool vca_config::save_cpu_field(unsigned int card_id, unsigned int cpu_id, const char *field_name, const char* field_value)
 {
 	using namespace boost::property_tree;
-	boost::interprocess::named_mutex sem(boost::interprocess::open_only_t(), VCACTL_CONFIG_NAMED_MTX_NAME);
-	boost::interprocess::scoped_lock <boost::interprocess::named_mutex> lock(sem, get_timeout(VCACTL_CONFIG_NAMED_MTX_TIMEOUT));
-	if (!lock)
-		throw vca_mutex_timeout(VCACTL_SHM_PATH VCACTL_CONFIG_NAMED_MTX_NAME);
+
+	close_on_exit fd(open(VCA_CONFIG_LOCK_FILE, O_RDWR));
+	if (!fd)
+		return false;
+	for (time_t now = time(NULL); flock(fd, LOCK_EX|LOCK_NB); sleep(0.2))
+		if (time(NULL) - now > VCA_CONFIG_LOCK_TIMEOUT) {
+			LOG_WARN("Cannot access config.xml - different process locks the file\n");
+			return false;
+		}
 
 	if (!load_vca_xml(root))
 		return false;
@@ -273,7 +285,7 @@ bool vca_config::save_cpu_field(unsigned int card_id, unsigned int cpu_id, const
 			}
 		}
 	}
-	catch (ptree_bad_path ex) {
+	catch (ptree_bad_path &ex) {
 		LOG_ERROR("save_cpu_field: cannot parse xml file %s: %s!\n", filename.c_str(), ex.what());
 		return false;
 	}
@@ -288,10 +300,15 @@ bool vca_config::save_blk_field(unsigned int card_id, unsigned int cpu_id, unsig
 {
 	using namespace boost::property_tree;
 
-	boost::interprocess::named_mutex sem(boost::interprocess::open_only_t(), VCACTL_CONFIG_NAMED_MTX_NAME);
-	boost::interprocess::scoped_lock <boost::interprocess::named_mutex> lock(sem, get_timeout(VCACTL_CONFIG_NAMED_MTX_TIMEOUT));
-	if (!lock)
-		throw vca_mutex_timeout(VCACTL_SHM_PATH VCACTL_CONFIG_NAMED_MTX_NAME);
+
+	close_on_exit fd(open(VCA_CONFIG_LOCK_FILE, O_RDWR));
+	if (!fd)
+		return false;
+	for (time_t now = time(NULL); flock(fd, LOCK_EX|LOCK_NB); sleep(0.2))
+		if (time(NULL) - now > VCA_CONFIG_LOCK_TIMEOUT) {
+			LOG_WARN("Cannot access config.xml - different process locks the file\n");
+			return false;
+		}
 
 	if (!load_vca_xml(root))
 		return false;
@@ -320,7 +337,7 @@ bool vca_config::save_blk_field(unsigned int card_id, unsigned int cpu_id, unsig
 			}
 		}
 	}
-	catch (ptree_bad_path ex) {
+	catch (ptree_bad_path &ex) {
 		LOG_ERROR("save_blk_field: cannot parse xml file %s: %s!\n", filename.c_str(), ex.what());
 		return false;
 	}
@@ -334,10 +351,15 @@ bool vca_config::save_blk_field(unsigned int card_id, unsigned int cpu_id, unsig
 bool vca_config::add_blk_dev_fields(unsigned int card_id, unsigned int cpu_id, int blk_dev_id)
 {
 	using namespace boost::property_tree;
-	boost::interprocess::named_mutex sem(boost::interprocess::open_only_t(), VCACTL_CONFIG_NAMED_MTX_NAME);
-	boost::interprocess::scoped_lock <boost::interprocess::named_mutex> lock(sem, get_timeout(VCACTL_CONFIG_NAMED_MTX_TIMEOUT));
-	if (!lock)
-		throw vca_mutex_timeout(VCACTL_SHM_PATH VCACTL_CONFIG_NAMED_MTX_NAME);
+
+	close_on_exit fd(open(VCA_CONFIG_LOCK_FILE, O_RDWR));
+	if (!fd)
+		return false;
+	for (time_t now = time(NULL); flock(fd, LOCK_EX|LOCK_NB); sleep(0.2))
+		if (time(NULL) - now > VCA_CONFIG_LOCK_TIMEOUT) {
+			LOG_WARN("Cannot access config.xml - different process locks the file\n");
+			return false;
+		}
 
 	if (!load_vca_xml(root))
 		return false;
@@ -406,7 +428,7 @@ bool vca_config::add_blk_dev_fields(unsigned int card_id, unsigned int cpu_id, i
 			}
 		}
 	}
-	catch (ptree_bad_path ex) {
+	catch (ptree_bad_path &ex) {
 		LOG_ERROR("add_blk_dev_fields: cannot parse xml file %s: %s!\n", filename.c_str(), ex.what());
 		return false;
 	}
@@ -430,7 +452,7 @@ bool vca_config::parse_global(boost::property_tree::ptree node)
 			}
 		}
 	}
-	catch (boost::property_tree::ptree_bad_path ex) {
+	catch (boost::property_tree::ptree_bad_path &ex) {
 		LOG_ERROR("parse_global: cannot parse xml file %s: %s!\n", filename.c_str(), ex.what());
 		return false;
 	}
@@ -472,7 +494,7 @@ bool vca_config::parse_card(boost::property_tree::ptree node)
 			}
 		}
 	}
-	catch (boost::property_tree::ptree_bad_path ex) {
+	catch (boost::property_tree::ptree_bad_path &ex) {
 		LOG_ERROR("parse_card: cannot parse xml file %s: %s!\n", filename.c_str(), ex.what());
 		return false;
 	}
@@ -517,7 +539,7 @@ bool vca_config::parse_cpu(int card_id, boost::property_tree::ptree node)
 			}
 		}
 	}
-	catch (boost::property_tree::ptree_bad_path ex) {
+	catch (boost::property_tree::ptree_bad_path &ex) {
 		LOG_ERROR("parse_cpu: cannot parse xml file %s: %s!\n", filename.c_str(), ex.what());
 		return false;
 	}
@@ -551,7 +573,7 @@ bool vca_config::parse_blk_devs(int card_id, int cpu_id, boost::property_tree::p
 			}
 		}
 	}
-	catch (boost::property_tree::ptree_bad_path ex) {
+	catch (boost::property_tree::ptree_bad_path &ex) {
 		LOG_ERROR("parse_blk_devs: cannot parse xml file %s: %s!\n", filename.c_str(), ex.what());
 		return false;
 	}
@@ -568,10 +590,14 @@ bool vca_config::blk_dev_exist(unsigned int card_id, unsigned int cpu_id, unsign
 
 bool vca_config::get_vca_config_from_file()
 {
-	boost::interprocess::named_mutex sem(boost::interprocess::open_only_t(), VCACTL_CONFIG_NAMED_MTX_NAME);
-	boost::interprocess::scoped_lock <boost::interprocess::named_mutex> lock(sem, get_timeout(VCACTL_CONFIG_NAMED_MTX_TIMEOUT));
-	if (!lock)
-		throw vca_mutex_timeout(VCACTL_SHM_PATH VCACTL_CONFIG_NAMED_MTX_NAME);
+	close_on_exit fd(open(VCA_CONFIG_LOCK_FILE, O_RDWR));
+	if (!fd)
+		return false;
+	for (time_t now = time(NULL); flock(fd, LOCK_EX|LOCK_NB); sleep(0.2))
+		if (time(NULL) - now > VCA_CONFIG_LOCK_TIMEOUT) {
+			LOG_WARN("Cannot access config.xml - different process locks the file\n");
+			return false;
+		}
 
 	if (!load_vca_xml(root))
 		return false;
@@ -724,10 +750,14 @@ bool vca_config::save_default_config()
 	}
 	root.put("<xmlattr>.version", VCA_CONFIG_VER_STRING);
 
-	boost::interprocess::named_mutex sem(boost::interprocess::open_only_t(), VCACTL_CONFIG_NAMED_MTX_NAME);
-	boost::interprocess::scoped_lock <boost::interprocess::named_mutex> lock(sem, get_timeout(VCACTL_CONFIG_NAMED_MTX_TIMEOUT));
-	if (!lock)
-		throw vca_mutex_timeout(VCACTL_SHM_PATH VCACTL_CONFIG_NAMED_MTX_NAME);
+	close_on_exit fd(open(VCA_CONFIG_LOCK_FILE, O_RDWR));
+	if (!fd)
+		return false;
+	for (time_t now = time(NULL); flock(fd, LOCK_EX|LOCK_NB); sleep(0.2))
+		if (time(NULL) - now > VCA_CONFIG_LOCK_TIMEOUT) {
+			LOG_WARN("Cannot access config.xml - different process locks the file\n");
+			return false;
+		}
 
 	if (!save_vca_xml(root))
 		return false;

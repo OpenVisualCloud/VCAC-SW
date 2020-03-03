@@ -27,38 +27,38 @@ lrzsz
 net-tools
 pciutils
 iptraf-ng
-tcpdump
-redhat-lsb-core
-vim
-mc
-wget
+#tcpdump
+#redhat-lsb-core
+vim-minimal
+#mc
+#wget
 mcelog
 openssh-server
 dhclient
 yum
 openssh-clients
 rpm
-nmap
+#nmap
 lsscsi
 lm_sensors
-sysstat
+#sysstat
 dos2unix
 libpciaccess
-libX11
-mesa-dri-drivers
-libXdamage
-libXext
-libXfixes
-libXxf86vm
-mesa-libGL
-mesa-libglapi
+#libX11
+#mesa-dri-drivers
+#libXdamage
+#libXext
+#libXfixes
+#libXxf86vm
+#mesa-libGL
+#mesa-libglapi
 grub2-efi
 grub2-tools
 grub2-efi-modules
 grub2
 #numactl-libs commented out by AO 2018.01, CentOS 7.4
 nfs-utils
-rsyslog	#dependency for GSS Proxy API
+#rsyslog	#dependency for GSS Proxy API
 
 # packages from vca_extras_repo
 

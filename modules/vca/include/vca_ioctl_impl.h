@@ -100,7 +100,7 @@ static void*  _vca_get_ioctl_data(void __user *argp, size_t __user *buf_size_usr
 	*total_size = header_size + buf_size;
 	copy_size =  header_size + min(input_buf_size, buf_size);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,0,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,0,0) || LINUX_VERSION_CODE == KERNEL_VERSION(4,18,0)
 	accessible = access_ok(argp, *total_size);
 #else
 	accessible = access_ok(VERIFY_WRITE, argp, *total_size);

@@ -201,6 +201,9 @@ function generate_k4_centos {
 # all descendant commits are treated as patches
 # and applied over base source rpm
 function get_kernel_base {
+(
+	set +o pipefail # ignore writing to closed pipe error
+
 	# _BASE_SHA1 should be commit marked as base kernel, so
 	# it is the one with "Base Kernel" *if there is such commit*
 	# otherwise it is last commit with word 'kernel'
@@ -227,6 +230,7 @@ function get_kernel_base {
 	test -n "${_BASE_SHA1}" \
 		|| die "base kernel not found, current branch: $(git rev-parse --abbrev-ref HEAD)"
 	echo "${_BASE_SHA1}"
+)
 }
 
 function git_rebase_autosquash() {

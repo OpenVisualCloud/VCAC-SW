@@ -390,7 +390,7 @@ function prepare_xen_archive () {
 
 function validate_parameters {
 	case $DIST in
-		7.3|7.4|7.6|16.04|16.04.3|16.10|18.04)
+		7.3|7.4|7.6|8.0|16.04|16.04.3|16.10|18.04)
 		;;
 		*)
 			die "Provided distribution is not supported"
@@ -421,6 +421,7 @@ get_vca_kernel_version(){
 			# TODO: package file name in the form: kernel-4.4.0_1.2.0.10.VCA-1.x86_64.rpm
 			local KER_MAJOR=$(echo "${KER_VER}" | sed -re 's/([0-9]\.[0-9]+).*/\1/')
 			[ "${KER_MAJOR}" == 3.10 ] && echo "${_PKG_REAL}" | sed -re 's/kernel-(.+VCA\.x86_64).*/\1/'
+			[ "${KER_MAJOR}" == 4.18 ] && echo "${_PKG_REAL}" | sed -re 's/kernel-(.+VCA\.x86_64).*/\1/'
 			[ "${KER_MAJOR}" == 4.4  ] && echo "${_PKG_REAL}" | sed -re 's/kernel-(.+VCA).*/\1/' | tr '_' '-'
 			[ "${KER_MAJOR}" == 4.14 ] && echo "${_PKG_REAL}" | sed -re 's/kernel-(.+VCA).*/\1/' | tr '_' '-'
 		;;
@@ -554,8 +555,8 @@ generate_images(){
 					echo -e "no MSS images selected\n"
 				;;
 				STD)
-					gen_ubuntu VLTL BRM
-					gen_ubuntu PRST BRM
+					# gen_ubuntu VLTL BRM
+					# gen_ubuntu PRST BRM
 					gen_ubuntu VLTL BRM OFF
 					gen_ubuntu PRST BRM OFF
 				;;
@@ -563,6 +564,10 @@ generate_images(){
 					die "Unsupported FEATURE=${FEATURE}"
 				;;
 			esac
+		;;
+		4.18)
+			gen_centos VLTL BRM
+			#gen_centos PRST BRM BLK 24
 		;;
 		*)
 			die "Unsupported KER_VER=${KER_VER}"

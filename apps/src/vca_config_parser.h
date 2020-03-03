@@ -33,6 +33,8 @@
 #include "vca_blockio_ctl.h"
 
 #define VCA_CONFIG_HEADER	"VCA_CONFIGURATION"
+#define VCA_CONFIG_LOCK_TIMEOUT 3
+#define VCA_CONFIG_LOCK_FILE VCA_CONFIG_DIR "/config.lock"
 
 #define VCA_CONFIG_VER_MAJOR	1
 #define VCA_CONFIG_VER_MINOR	5

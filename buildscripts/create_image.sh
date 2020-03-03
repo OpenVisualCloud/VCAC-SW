@@ -324,7 +324,7 @@ create_initramfs(){
 	local _DRACUT_STDOUT; _DRACUT_STDOUT="$(mktemp --tmpdir dracut_stdout.XXX )"
 	# TODO: test omitting additionally: aufs, bcache, btrfs, dm, lvm, mraid
 	# TODO: test omitting additionally for volatiles: resume, rootfs-block, shutdown
-	local _DRACUT_COMMON_EXCLUDED_MODULES="biosdevname bootchart btrfs busybox caps cifs crypt dm dmsquash-live-ntfs dmraid fcoe fcoe-uefi iscsi lvm mdraid microcode_ctl-fw_dir_override multipath nbd plymouth" #modsign
+	local _DRACUT_COMMON_EXCLUDED_MODULES="biosdevname bootchart btrfs busybox caps cifs crypt dm dmsquash-live-ntfs dmraid fcoe fcoe-uefi iscsi lvm mdraid microcode_ctl-fw_dir_override multipath nbd plymouth " #modsign
 	local _DRACUT_ERROR_KEYWORDS="cannot\|could not\|ERROR\|Failed\|field width not sufficient for storing file size" # Not an error, it is about host not the image directory: "Kernel version 4.4.0-1.2.0.10.VCA has no module directory /lib/modules/4.4.0-1.2.0.10.VCA"
 	local _DRACUT_STATUS; _DRACUT_STATUS="$( mktemp --tmpdir dracut_status.XXX )"
 	local _DRACUT_EXCLUDED_ERRORS="microcode_ctl"

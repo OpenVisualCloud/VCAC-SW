@@ -338,7 +338,7 @@ SET(CPACK_RPM_PRE_UNINSTALL_SCRIPT_FILE "${PKG_SCRIP_NAME}/prerm")
 set(CPACK_DEBIAN_PACKAGE_DEPENDS
 	"bridge-utils, mtools, pciutils, ipcalc, gdisk, coreutils, findutils, e2fsprogs, kpartx, gawk, mount")
 set(CPACK_RPM_PACKAGE_REQUIRES
-	"bridge-utils, mtools, pciutils, gdisk, coreutils, findutils, e2fsprogs, kpartx, gawk, initscripts, util-linux, man")
+	"mtools, pciutils, gdisk, coreutils, findutils, e2fsprogs, kpartx, gawk, initscripts, util-linux, man")
 
 INCLUDE(CPack)
 

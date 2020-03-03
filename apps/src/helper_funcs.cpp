@@ -323,43 +323,6 @@ int run_cmd_with_output(const char *cmdline, char *output, unsigned int output_s
 	return _run_cmd(cmdline, true, output, output_size);
 }
 
-std::string get_shm_mutex_path(const std::string &name)
-{
-	return VCACTL_SHM_PATH + name;
-}
-
-bool vca_named_mutex_create(const char *mtx_name)
-{
-	using namespace boost::interprocess;
-
-	int rc;
-	std::string mtx_path = get_shm_mutex_path(mtx_name);
-
-	try {
-		/* trying to open named mutex file first to obtain whether
-		 * changing group and permission is required or not */
-		named_mutex(open_only_t(), mtx_name);
-	}
-	catch (interprocess_exception) {
-		common_log("Cannot open named mutex %s, trying to create...\n", mtx_name);
-		try {
-			/* if named mutex doesn't exist then need to create it, change group
-			 * and permission and open them for later usage */
-			named_mutex(open_or_create_t(), mtx_name);
-
-			rc = change_group_and_mode(mtx_path.c_str());
-			if (rc == FAIL) {
-				return false;
-			}
-		}
-		catch (interprocess_exception &ex) {
-			common_log("ERROR: %s\n", ex.what());
-			return false;
-		}
-	}
-	return true;
-}
-
 static filehandle_t file_create_or_open(const char *file_name, int flags)
 {
 	int rc;
@@ -470,11 +433,6 @@ unsigned int get_passed_time_ms(const boost::posix_time::ptime start)
 	return tp.length().total_milliseconds();
 }
 
-boost::posix_time::ptime get_timeout(unsigned int timeout) {
-	boost::posix_time::ptime t(boost::posix_time::microsec_clock::universal_time());
-
-	return (t + boost::posix_time::seconds(timeout));
-}
 
 /* replace all occurences of 'what' string in 'str' with 'with' string */
 int replace_all(std::string &str, const std::string &what, const std::string &with)

@@ -1459,7 +1459,7 @@ static int virtnet_change_mtu(struct net_device *dev, int new_mtu)
 }
 
 #ifdef RHEL_RELEASE_CODE
-	#if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7, 5)
+	#if RHEL_RELEASE_CODE == RHEL_RELEASE_VERSION(7, 5)
 		#define ndo_change_mtu ndo_change_mtu_rh74
 	#endif
 #endif

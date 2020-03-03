@@ -1,4 +1,6 @@
-#!/bin/sh
+#!/bin/bash
+set -e
+trap 'e=$? ; echo "ERROR $e $BASH_COMMAND" >&2 ; exit $e' err
 #
 # Intel VCA Software Stack (VCASS)
 #
@@ -18,6 +20,8 @@
 #
 # Intel VCA Scripts.
 #
+exec 2> >( while read L ; do echo -e "$(date)\t${1##*/}\t${L}" ; done >>/var/log/vca/vca_ifup.log )
+
 
 log(){
 	$ECHO "`$DATE`$TAG: $1" >> /var/log/vca/vca_ifup.log
@@ -83,9 +87,9 @@ config_path(){
 		log "Not found ipcalc"
 		exit 2
 	}
-	
-	BRCTL=/usr/sbin/brctl
-	[ -f $BRCTL ] || BRCTL=/sbin/brctl
+
+	BRCTL=/usr/sbin/bridge
+	[ -f $BRCTL ] || BRCTL=/sbin/bridge
 	[ -f $BRCTL ] || {
 		log "Not found brctl"
 		exit 2
@@ -151,7 +155,7 @@ preconfig(){
 		log "Cannot determine host mask"
 		exit 1
 	fi
-	
+
 	get_card_dev
 	if [ -z $CARD_DEV ] ; then
 		log "Cannot determine card's dev"
@@ -167,7 +171,7 @@ check_bridging(){
 		return 1
 	fi
 
-	BRIDGE_STATUS=`$BRCTL show $BRIDGE_DEV |$EGREP $BRIDGE_DEV | $XARGS |$CUT -f2 -d" "`
+	BRIDGE_STATUS=`$BRCTL link show $BRIDGE_DEV |$EGREP $BRIDGE_DEV | $XARGS |$CUT -f2 -d" "`
 	if [ "$BRIDGE_STAUS" == "$BRIDGE_DEV" ]; then
 		log "Cannot find bridge $BRIDGE_DEV"
 		exit 1
@@ -189,7 +193,7 @@ add_to_bridge(){
 	$IP link set dev $CARD_DEV up
 
 	log "Adding $CARD_DEV device to bridge $BRIDGE_DEV"
-	$BRCTL addif $BRIDGE_DEV $CARD_DEV
+	$BRCTL add $BRIDGE_DEV $CARD_DEV
 }
 
 PARAM1=$1
@@ -209,7 +213,7 @@ if [ ! -z $PARAM2 ] ; then
 	TAG=" [$CARD_ID:$CPU_ID]"
 else
 	TAG=" [$PARAM1]"
-	FILE_PATH="/sys/$PARAM1/address"
+	FILE_PATH="/sys$PARAM1/address"
 	log "Path to device: $FILE_PATH"
 
 	if [ -f $FILE_PATH ] ;then
@@ -243,5 +247,4 @@ else
 	ifup
 	configure_routing
 fi
-
 

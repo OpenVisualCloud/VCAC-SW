@@ -37,7 +37,7 @@
 #include <linux/blkdev.h>
 #include <linux/kthread.h>
 #include <linux/version.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) // the blk_status_t actually appeared in 4.13.x
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) || LINUX_VERSION_CODE == KERNEL_VERSION(4,18,0) // the blk_status_t actually appeared in 4.13.x
 	#include <linux/blk-mq.h>
 #endif
 
@@ -52,19 +52,9 @@
 #include "plx_hw_ops_blockio.h"
 #endif
 
-#ifdef RHEL_RELEASE_CODE
-#else /* RHEL_RELEASE_CODE */
-#	if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
-#		define BIO_FORMAT_SECTOR
-#	endif
-#	if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
-#		define BIO_ERROR_SEPARATE
-#	endif
-#	if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 8, 0)
-#		define BIO_OP_SYNC
-#	endif
-
-#endif /* RHEL_RELEASE_CODE */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
+#	define BIO_FORMAT_SECTOR
+#endif
 
 static int vcablk_major = 0;	/* Registered device number */
 #define VCA_BLK_DISK_NAME "vcablk"
@@ -114,7 +104,7 @@ struct vcablk_disk {
 	spinlock_t lock;                    /* For mutual exclusion */
 	short ref_cnt;                      /* How many users */
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) // the blk_status_t actually appeared in 4.13.x
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) || LINUX_VERSION_CODE == KERNEL_VERSION(4,18,0) // the blk_status_t actually appeared in 4.13.x
 	struct request_queue *queue;        /* The device request queue */
 	struct gendisk *gdisk;              /* The gendisk structure */
 	struct blk_mq_tag_set tag_set;
@@ -200,7 +190,7 @@ vcablk_disk_request_end(struct vcablk_disk *dev, struct request *req, int ret)
 	if (ret)
 		pr_err("%s: ret %i\n", __func__, ret);
 	spin_lock_irq(&dev->lock);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) // the blk_status_t actually appeared in 4.13.x
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) || LINUX_VERSION_CODE == KERNEL_VERSION(4,18,0) // the blk_status_t actually appeared in 4.13.x
 	blk_mq_end_request(req, ret);
 #else
 	__blk_end_request_all(req, ret);
@@ -575,7 +565,7 @@ vcablk_disk_make_request_thread(void *data)
 	return 0;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) // the blk_status_t actually appeared in 4.13.x
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) || LINUX_VERSION_CODE == KERNEL_VERSION(4,18,0) // the blk_status_t actually appeared in 4.13.x
 	static blk_status_t vcablk_disk_request_fn(struct blk_mq_hw_ctx *hctx, const struct blk_mq_queue_data* bd)
 	{
 		struct request *rq = bd->rq;
@@ -864,7 +854,7 @@ static struct block_device_operations vcablk_ops = {
 	.getgeo		= vcablk_disk_getgeo
 };
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) // the blk_status_t actually appeared in 4.13.x
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) || LINUX_VERSION_CODE == KERNEL_VERSION(4,18,0) // the blk_status_t actually appeared in 4.13.x
 	static struct blk_mq_ops _mq_ops = {
 		.queue_rq = vcablk_disk_request_fn,
 	};
@@ -987,7 +977,7 @@ vcablk_disk_create(struct vcablk_dev* fdev, int uniq_id, size_t size, bool read_
 		goto err;
 	}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) // the blk_status_t actually appeared in 4.13.x
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) || LINUX_VERSION_CODE == KERNEL_VERSION(4,18,0) // the blk_status_t actually appeared in 4.13.x
 	disk->queue = dev->queue = blk_mq_init_sq_queue(&dev->tag_set, &_mq_ops,
 											BLKDEV_MAX_RQ,
 											BLK_MQ_F_SHOULD_MERGE); // BLKDEV_MAX_RQ is not a true limitation; quepe_depth may be set bigger here

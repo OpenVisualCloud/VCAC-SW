@@ -5602,9 +5602,6 @@ int main(int argc, char *argv[])
 			log_args(argc, argv);
 		}
 
-		if(!vca_named_mutex_create(VCACTL_CONFIG_NAMED_MTX_NAME))
-			exit(EBUSY);
-
 		/* start after program name */
 		int parsed_args = 1;
 

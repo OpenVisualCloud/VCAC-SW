@@ -42,7 +42,6 @@
 #include <iostream>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/asio/ip/address.hpp>
-#include <boost/interprocess/sync/named_mutex.hpp>
 #include <boost/interprocess/sync/scoped_lock.hpp>
 
 
@@ -85,22 +84,13 @@ public:
 	close_on_exit& operator =(filehandle_t fd);
 };
 
-/* exception class to indicate VCA mutex timeout */
-class vca_mutex_timeout : public std::runtime_error {
-public:
-	vca_mutex_timeout(const std::string& mutex_name) :
-		std::runtime_error("Mutex timeout reached!\n "
-			"If you see this message repeatedly, try to remove file " + mutex_name + "\n") {}
-};
 
 std::string int_to_string(int val);
 std::string char_to_string(char *c_string);
 bool is_forcing_cmd_confirmed();
 boost::posix_time::ptime get_time();
 unsigned int get_passed_time_ms(const boost::posix_time::ptime start);
-boost::posix_time::ptime get_timeout(unsigned int timeout);
 int replace_all(std::string &str, const std::string &what, const std::string &with);
-std::string get_shm_mutex_path(const std::string &name);
 bool could_open_file(const char *file_path);
 filehandle_t open_path(const char* path, int flags = O_RDWR| O_CLOEXEC);
 
@@ -139,7 +129,6 @@ int drop_root_privileges();
 int change_group_and_mode(const char *file);
 int run_cmd(const char *cmdline);
 int run_cmd_with_output(const char *cmdline, char *output, unsigned int output_size);
-bool vca_named_mutex_create(const char *sem_name);
 filehandle_t lock_file(const char *name);
 
 #ifdef __GNUC__

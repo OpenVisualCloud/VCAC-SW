@@ -1,0 +1,542 @@
+From 7762224630c1c0968f8729377acde26e04890af4 Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Mon, 18 Nov 2019 13:04:47 +0100
+Subject: [PATCH 01/13] Set specfile extraction path based on polished
+ KERNELRELEASE
+
+---
+ scripts/package/mkspec | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/scripts/package/mkspec b/scripts/package/mkspec
+index e05646dc24dc..b09d498a5250 100755
+--- a/scripts/package/mkspec
++++ b/scripts/package/mkspec
+@@ -75,7 +75,7 @@ $S$M	This package provides kernel headers and makefiles sufficient to build modu
+ $S$M	against the $__KERNELRELEASE kernel package.
+ $S$M
+ $S	%prep
+-$S	%setup -q
++$S	%setup -q -n kernel-$__KERNELRELEASE
+ $S
+ $S	%build
+ $S	make %{?_smp_mflags} KBUILD_BUILD_VERSION=%{release}
+-- 
+2.24.0
+
+
+From e038ccdb630e4875581c812ce525a10752c423fc Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Fri, 10 Jan 2020 09:50:19 +0100
+Subject: [PATCH 02/13] Provide Obsoletes/Requires/Conflicts/Provides from
+ kernel.spec of CentOS kernel 4.18.0-80
+
+---
+ scripts/package/mkspec | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/scripts/package/mkspec b/scripts/package/mkspec
+index b09d498a5250..610282ea8cf6 100755
+--- a/scripts/package/mkspec
++++ b/scripts/package/mkspec
+@@ -38,6 +38,9 @@ EXCLUDES="$RCS_TAR_IGNORE --exclude=.tmp_versions --exclude=*vmlinux* \
+ #  $S: this line is enabled only when building source package
+ #  $M: this line is enabled only when CONFIG_MODULES is enabled
+ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
++	%define kernel_prereq  coreutils, systemd >= 203-2, /usr/bin/kernel-install
++	%define initrd_prereq  dracut >= 027
++
+ 	Name: kernel
+ 	Summary: The Linux Kernel
+ 	Version: $__KERNELRELEASE
+@@ -47,7 +50,18 @@ sed -e '/^DEL/d' -e 's/^\t*//' <<EOF
+ 	Vendor: The Linux Community
+ 	URL: http://www.kernel.org
+ $S	Source: kernel-$__KERNELRELEASE.tar.gz
++	Conflicts: xfsprogs < 4.3.0-1
++	Conflicts: xorg-x11-drv-vmmouse < 13.0.99
+ 	Provides: $PROVIDES
++	Provides: kernel-headers = %{version}
++	Provides: installonlypkg(kernel)
++	Provides: kernel-%{?1:%{1}-}core-uname-r = %{version}-%{release}.%{_target_cpu}%{?variant}%{?1:+%{1}}
++	Provides: kernel-%{_target_cpu} = %{rpmversion}-%{pkg_release}%{?1:+%{1}}
++	Provides: kernel-uname-r = %{version}-%{release}.%{_target_cpu}%{?variant}%{?1:+%{1}}
++	Requires(pre): %{kernel_prereq}
++	Requires(pre): %{initrd_prereq}
++	Requires(pre): linux-firmware >= 20150904-56.git6ebf5d57
++	Requires(preun): systemd >= 200
+ 	%define __spec_install_post /usr/lib/rpm/brp-compress || :
+ 	%define debug_package %{nil}
+ 
+@@ -57,8 +71,7 @@ $S	Source: kernel-$__KERNELRELEASE.tar.gz
+ 	%package headers
+ 	Summary: Header files for the Linux kernel for use by glibc
+ 	Group: Development/System
+-	Obsoletes: kernel-headers
+-	Provides: kernel-headers = %{version}
++	Obsoletes: kernel-headers < %{rpmversion}-%{pkg_release}
+ 	%description headers
+ 	Kernel-headers includes the C header files that specify the interface
+ 	between the Linux kernel and userspace libraries and programs.  The
+-- 
+2.24.0
+
+
+From db32def3a064264bd0484e5248d8baf699d85019 Mon Sep 17 00:00:00 2001
+From: Adam Rutkowski <adam.j.rutkowski@intel.com>
+Date: Thu, 27 Nov 2014 15:47:16 +0100
+Subject: [PATCH 03/13] Fix compilation with XEN_DOM0=y
+
+Remove references to undefined symbols:
+- MAX_INDIRECT_SEGMENTS
+- MAX_INDIRECT_PAGES
+
+Signed-off-by: Adam Rutkowski <adam.j.rutkowski@intel.com>
+Signed-off-by: Bartosz <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+---
+ drivers/block/xen-blkback/xenbus.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/block/xen-blkback/xenbus.c b/drivers/block/xen-blkback/xenbus.c
+index a4bc74e72c39..0dde91a3efbf 100644
+--- a/drivers/block/xen-blkback/xenbus.c
++++ b/drivers/block/xen-blkback/xenbus.c
+@@ -170,7 +170,7 @@ static struct xen_blkif *xen_blkif_alloc(domid_t domid)
+ {
+ 	struct xen_blkif *blkif;
+ 
+-	BUILD_BUG_ON(MAX_INDIRECT_PAGES > BLKIF_MAX_INDIRECT_PAGES_PER_REQUEST);
++	/* BUILD_BUG_ON(MAX_INDIRECT_PAGES > BLKIF_MAX_INDIRECT_PAGES_PER_REQUEST); */
+ 
+ 	blkif = kmem_cache_zalloc(xen_blkif_cachep, GFP_KERNEL);
+ 	if (!blkif)
+@@ -862,12 +862,14 @@ again:
+ 
+ 	xen_blkbk_barrier(xbt, be, be->blkif->vbd.flush_support);
+ 
++	/*
+ 	err = xenbus_printf(xbt, dev->nodename, "feature-persistent", "%u", 1);
+ 	if (err) {
+ 		xenbus_dev_fatal(dev, err, "writing %s/feature-persistent",
+ 				 dev->nodename);
+ 		goto abort;
+ 	}
++	*/
+ 
+ 	err = xenbus_printf(xbt, dev->nodename, "sectors", "%llu",
+ 			    (unsigned long long)vbd_sz(&be->blkif->vbd));
+-- 
+2.24.0
+
+
+From 896b029b93833152bf18b02c160bddfd44a0d9de Mon Sep 17 00:00:00 2001
+From: Marcin Rysztowski <marcin.rysztowski@intel.com>
+Date: Tue, 24 Mar 2015 10:43:32 +0100
+Subject: [PATCH 04/13] Add compilation and linker flags required by SDL
+
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+---
+ Makefile | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 353ccafaa145..71bf5b1163da 100644
+--- a/Makefile
++++ b/Makefile
+@@ -390,12 +390,12 @@ CHECK		= sparse
+ CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
+ 		  -Wbitwise -Wno-return-void -Wno-unknown-attribute $(CF)
+ NOSTDINC_FLAGS  =
+-CFLAGS_MODULE   =
++CFLAGS_MODULE   = -fstack-protector -O2 -D_FORTIFY_SOURCE=2 -Wformat
+ AFLAGS_MODULE   =
+-LDFLAGS_MODULE  =
+-CFLAGS_KERNEL	=
++LDFLAGS_MODULE  = -z noexecstack -z relro -z now
++CFLAGS_KERNEL	= -D_FORTIFY_SOURCE=2 -Wformat
+ AFLAGS_KERNEL	=
+-LDFLAGS_vmlinux =
++LDFLAGS_vmlinux	= -z noexecstack -z relro -z now
+ 
+ # Use USERINCLUDE when you must reference the UAPI directories only.
+ USERINCLUDE    := \
+-- 
+2.24.0
+
+
+From b4186af3a52993ff539085c329314f68fb172bfc Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Fri, 10 Jan 2020 10:18:22 +0100
+Subject: [PATCH 05/13] Added default .config file
+
+---
+ .config | 4340 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 4340 insertions(+)
+ create mode 100644 .config
+
+diff --git a/.config b/.config
+new file mode 100644
+index 000000000000..b1e6f9597a08
+-- 
+2.24.0
+
+
+From 85e23789c32e5cab92142efa9dc02c3ff773199d Mon Sep 17 00:00:00 2001
+From: Adam Rutkowski <adam.j.rutkowski@intel.com>
+Date: Wed, 26 Aug 2015 07:05:05 -0400
+Subject: [PATCH 06/13] Allow PCI passtrough for BDW graphics despite RMRR
+ usage
+
+Broadwell GPU drivers for both Windows and Linux are capable of working in
+"universal passthrough" mode where standard PCI passhtorugh of GPU device
+is enough for the guest to handle GPU device. Thus we assume RMRR space is
+not required for this devices. For now enabling this for VCA GPU device
+only as we haven't tested other devices.
+
+Signed-off-by: Adam Rutkowski <adam.j.rutkowski@intel.com>
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+---
+ drivers/iommu/intel-iommu.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/intel-iommu.c b/drivers/iommu/intel-iommu.c
+index 0962d65a042e..a7a92c13708a 100644
+--- a/drivers/iommu/intel-iommu.c
++++ b/drivers/iommu/intel-iommu.c
+@@ -60,6 +60,7 @@
+ #define IS_USB_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_SERIAL_USB)
+ #define IS_ISA_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_BRIDGE_ISA)
+ #define IS_AZALIA(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x3a3e)
++#define IS_VCA_GPU(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x162a)
+ 
+ #define IOAPIC_RANGE_START	(0xfee00000)
+ #define IOAPIC_RANGE_END	(0xfeefffff)
+@@ -2909,6 +2910,13 @@ static bool device_has_rmrr(struct device *dev)
+  * The same exception is made for graphics devices, with the requirement that
+  * any use of the RMRR regions will be torn down before assigning the device
+  * to a guest.
++ *
++ * Broadwell GPU drivers for both Windows and Linux are capable of working in
++ * "universal passthrough" mode where standard PCI passhtorugh of GPU device
++ * is enough for the guest to handle GPU device. Thus we assume RMRR space is
++ * not required for this devices. For now enabling this for VCA GPU device
++ * only as we haven't tested other devices.
++ *
+  */
+ static bool device_is_rmrr_locked(struct device *dev)
+ {
+@@ -2918,7 +2926,7 @@ static bool device_is_rmrr_locked(struct device *dev)
+ 	if (dev_is_pci(dev)) {
+ 		struct pci_dev *pdev = to_pci_dev(dev);
+ 
+-		if (IS_USB_DEVICE(pdev) || IS_GFX_DEVICE(pdev))
++		if (IS_USB_DEVICE(pdev) || IS_GFX_DEVICE(pdev) || IS_VCA_GPU(pdev))
+ 			return false;
+ 	}
+ 
+-- 
+2.24.0
+
+
+From 0a73873dbd416c0b4447fc2db000720a93ae166f Mon Sep 17 00:00:00 2001
+From: Marcin Rysztowski <marcin.rysztowski@intel.com>
+Date: Fri, 7 Oct 2016 13:09:25 +0200
+Subject: [PATCH 07/13] vmlinux*.bz2 file moved to separeate kernel-debug
+ package
+
+vmlinux*.bz2 file, containing unstripped vmlinux file, moved to separate package to limit footprint of image
+---
+ scripts/package/mkspec | 15 ++++++++++++++-
+ 1 file changed, 14 insertions(+), 1 deletion(-)
+
+diff --git a/scripts/package/mkspec b/scripts/package/mkspec
+index 610282ea8cf6..e569258b7401 100755
+--- a/scripts/package/mkspec
++++ b/scripts/package/mkspec
+@@ -87,6 +87,13 @@ $S$M	%description -n kernel-devel
+ $S$M	This package provides kernel headers and makefiles sufficient to build modules
+ $S$M	against the $__KERNELRELEASE kernel package.
+ $S$M
++	%package debug
++	Summary: Debug package with unstripped $__KERNELRELEASE kernel
++	Group: System Environment/Kernel
++	AutoReqProv: no
++	%description -n kernel-debug
++	This package provides unstripped $__KERNELRELEASE kernel
++
+ $S	%prep
+ $S	%setup -q -n kernel-$__KERNELRELEASE
+ $S
+@@ -145,11 +152,17 @@ $S$M	ln -sf /usr/src/kernels/$KERNELRELEASE source
+ $M	/lib/modules/$KERNELRELEASE
+ $M	%exclude /lib/modules/$KERNELRELEASE/build
+ $M	%exclude /lib/modules/$KERNELRELEASE/source
+-	/boot/*
++	/boot/config*
++	/boot/System.map*
++	/boot/vmlinuz*
+ 
+ 	%files headers
+ 	%defattr (-, root, root)
+ 	/usr/include
++
++	%files debug
++	%defattr (-, root, root)
++	/boot/vmlinux*bz2
+ $S$M
+ $S$M	%files devel
+ $S$M	%defattr (-, root, root)
+-- 
+2.24.0
+
+
+From 4698e63e727553c66dd4e0095f4ec41a81e7523b Mon Sep 17 00:00:00 2001
+From: Marcin Rysztowski <marcin.rysztowski@intel.com>
+Date: Wed, 19 Oct 2016 12:54:39 +0200
+Subject: [PATCH 08/13] SKL GPU (8086:193a) recognized as VCA_GPU by IOMMU
+
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+---
+ drivers/iommu/intel-iommu.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/intel-iommu.c b/drivers/iommu/intel-iommu.c
+index a7a92c13708a..97065c0da526 100644
+--- a/drivers/iommu/intel-iommu.c
++++ b/drivers/iommu/intel-iommu.c
+@@ -60,7 +60,7 @@
+ #define IS_USB_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_SERIAL_USB)
+ #define IS_ISA_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_BRIDGE_ISA)
+ #define IS_AZALIA(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x3a3e)
+-#define IS_VCA_GPU(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x162a)
++#define IS_VCA_GPU(pdev) ((pdev)->vendor == 0x8086 && ((pdev)->device == 0x162a || (pdev)->device == 0x193a))
+ 
+ #define IOAPIC_RANGE_START	(0xfee00000)
+ #define IOAPIC_RANGE_END	(0xfeefffff)
+-- 
+2.24.0
+
+
+From 0fd43c3d79f75844b38f27ce49a6ff48afde788a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Wojciech=20Pi=C4=99tka?= <wojciechx.pietka@intel.com>
+Date: Thu, 16 Jan 2020 09:07:18 +0100
+Subject: [PATCH 09/13] Fix compilation error
+
+---
+ arch/x86/kernel/setup.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/x86/kernel/setup.c b/arch/x86/kernel/setup.c
+index fe4d5c57e1ae..df4784657591 100644
+--- a/arch/x86/kernel/setup.c
++++ b/arch/x86/kernel/setup.c
+@@ -920,7 +920,7 @@ static void rh_check_supported(void)
+ {
+ 	bool guest;
+ 
+-	guest = (x86_hyper_type != X86_HYPER_NATIVE || boot_cpu_has(X86_FEATURE_HYPERVISOR));
++	guest = (hypervisor_is_type(X86_HYPER_MS_HYPERV) || boot_cpu_has(X86_FEATURE_HYPERVISOR));
+ 
+ 	/* RHEL supports single cpu on guests only */
+ 	if (((boot_cpu_data.x86_max_cores * smp_num_siblings) == 1) &&
+-- 
+2.24.0
+
+
+From 7e3ac1999eeb28f47e680cc93cf6d0488f08df2f Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Wojciech=20Pi=C4=99tka?= <wojciechx.pietka@intel.com>
+Date: Thu, 16 Jan 2020 10:43:21 +0100
+Subject: [PATCH 10/13] Adjust .config
+
+---
+ .config | 47 +++++++++++++++++++++++++++++++++++++----------
+ 1 file changed, 37 insertions(+), 10 deletions(-)
+
+-- 
+2.24.0
+
+
+From c5b6c6e01f151a5b72cbcda7f827fc80989c0d56 Mon Sep 17 00:00:00 2001
+From: Wojciech Pietka <wojciechx.pietka@intel.com>
+Date: Fri, 17 Jan 2020 06:36:21 -0500
+Subject: [PATCH 11/13] adjust Makefile
+
+---
+ Makefile         | 13 +++++++++++--
+ Makefile.rhelver | 45 ---------------------------------------------
+ 2 files changed, 11 insertions(+), 47 deletions(-)
+ delete mode 100644 Makefile.rhelver
+
+diff --git a/Makefile b/Makefile
+index 71bf5b1163da..40d2d2d79e43 100644
+--- a/Makefile
++++ b/Makefile
+@@ -37,8 +37,17 @@ export LC_COLLATE LC_NUMERIC
+ unexport GREP_OPTIONS
+ 
+ # Set RHEL variables
+-# Use this spot to avoid future merge conflicts
+-include Makefile.rhelver
++RHEL_MAJOR = 8
++RHEL_MINOR = 1
++RHEL_RELEASE = 147.3.1
++EARLY_YSTREAM ?= no
++EARLY_YBUILD:=
++EARLY_YRELEASE:=
++ifneq ("$(ZSTREAM)", "yes")
++  ifeq ("$(EARLY_YSTREAM)","yes")
++    RHEL_RELEASE:=$(RHEL_RELEASE).$(EARLY_YRELEASE)
++  endif
++endif
+ 
+ # We are using a recursive build, so we need to do a little thinking
+ # to get the ordering right.
+diff --git a/Makefile.rhelver b/Makefile.rhelver
+deleted file mode 100644
+index dad836d0a482..000000000000
++++ /dev/null
+@@ -1,45 +0,0 @@
+-RHEL_MAJOR = 8
+-RHEL_MINOR = 1
+-
+-#
+-# RHEL_RELEASE
+-# -------------
+-#
+-# Represents build number in 'release' part of RPM's name-version-release.
+-#   name is <package_name>, e.g. kernel
+-#   version is upstream kernel version this kernel is based on, e.g. 4.18.0
+-#   release is <RHEL_RELEASE>.<dist_tag>[<buildid>], e.g. 100.el8
+-#
+-# Use this spot to avoid future merge conflicts.
+-# Do not trim this comment.
+-RHEL_RELEASE = 147.3.1
+-
+-#
+-# Early y+1 numbering
+-# --------------------
+-#
+-# In early y+1 process, RHEL_RELEASE consists of 2 numbers: x.y
+-# First is RHEL_RELEASE inherited/merged from y as-is, second number
+-# is incremented with each build starting from 1. After merge from y,
+-# it resets back to 1. This way y+1 nvr reflects status of last merge.
+-#
+-# Example:
+-#
+-# rhel8.0                        rhel-8.1
+-#   kernel-4.18.0-58.el8   -->     kernel-4.18.0-58.1.el8
+-#                                  kernel-4.18.0-58.2.el8
+-#   kernel-4.18.0-59.el8           kernel-4.18.0-59.1.el8
+-#   kernel-4.18.0-60.el8
+-#   kernel-4.18.0-61.el8   -->     kernel-4.18.0-61.1.el8
+-#
+-#
+-# Use this spot to avoid future merge conflicts.
+-# Do not trim this comment.
+-EARLY_YSTREAM ?= no
+-EARLY_YBUILD:=
+-EARLY_YRELEASE:=
+-ifneq ("$(ZSTREAM)", "yes")
+-  ifeq ("$(EARLY_YSTREAM)","yes")
+-    RHEL_RELEASE:=$(RHEL_RELEASE).$(EARLY_YRELEASE)
+-  endif
+-endif
+-- 
+2.24.0
+
+
+From 8b54bac653a3ab7e848695f6d3260bd72a67c96a Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Wojciech=20Pi=C4=99tka?= <wojciechx.pietka@intel.com>
+Date: Wed, 22 Jan 2020 14:05:37 -0500
+Subject: [PATCH 12/13] Add original centos .config
+
+---
+ .config | 6425 +++++++++++++++++++++++++++++++++++++++++--------------
+ 1 file changed, 4820 insertions(+), 1605 deletions(-)
+
+-- 
+2.24.0
+
+
+From 6ce85ffb0028d6e4b505178c9cc1240888139f47 Mon Sep 17 00:00:00 2001
+From: Slawomir Pawlowski <slawomir.pawlowski@intel.com>
+Date: Tue, 17 Sep 2019 09:20:48 +0000
+Subject: [PATCH 13/13] PCI: Add DMA alias quirk for Intel VCA NTB
+
+Intel Visual Compute Accelerator (VCA) is a family of PCIe add-in devices
+exposing computational units via Non Transparent Bridges (NTB, PEX 87xx).
+
+Similarly to MIC x200, we need to add DMA aliases to allow buffer access
+when IOMMU is enabled.
+
+Add aliases to allow computational unit access to host memory.  These
+aliases mark the whole VCA device as one IOMMU group.
+
+All possible slot numbers (0x20) are used, since we are unable to tell what
+slot is used on other side.  This quirk is intended for both host and
+computational unit sides.  The VCA devices have up to five functions: four
+for DMA channels and one additional.
+
+Link: https://lore.kernel.org/r/5683A335CC8BE1438C3C30C49DCC38DF637CED8E@IRSMSX102.ger.corp.intel.com
+Signed-off-by: Slawomir Pawlowski <slawomir.pawlowski@intel.com>
+Signed-off-by: Przemek Kitszel <przemyslawx.kitszel@intel.com>
+Signed-off-by: Bjorn Helgaas <bhelgaas@google.com>
+---
+ drivers/pci/quirks.c | 34 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+diff --git a/drivers/pci/quirks.c b/drivers/pci/quirks.c
+index 36f8e325818f..ae945b4c1faa 100644
+--- a/drivers/pci/quirks.c
++++ b/drivers/pci/quirks.c
+@@ -3872,6 +3872,40 @@ static void quirk_mic_x200_dma_alias(struct pci_dev *pdev)
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2260, quirk_mic_x200_dma_alias);
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2264, quirk_mic_x200_dma_alias);
+ 
++/*
++ * Intel Visual Compute Accelerator (VCA) is a family of PCIe add-in devices
++ * exposing computational units via Non Transparent Bridges (NTB, PEX 87xx).
++ *
++ * Similarly to MIC x200, we need to add DMA aliases to allow buffer access
++ * when IOMMU is enabled.  These aliases allow computational unit access to
++ * host memory.  These aliases mark the whole VCA device as one IOMMU
++ * group.
++ *
++ * All possible slot numbers (0x20) are used, since we are unable to tell
++ * what slot is used on other side.  This quirk is intended for both host
++ * and computational unit sides.  The VCA devices have up to five functions
++ * (four for DMA channels and one additional).
++ */
++static void quirk_pex_vca_alias(struct pci_dev *pdev)
++{
++	const unsigned int num_pci_slots = 0x20;
++	unsigned int slot;
++
++	for (slot = 0; slot < num_pci_slots; slot++) {
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot, 0x0));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot, 0x1));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot, 0x2));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot, 0x3));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot, 0x4));
++	}
++}
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2954, quirk_pex_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2955, quirk_pex_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2956, quirk_pex_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2958, quirk_pex_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2959, quirk_pex_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x295A, quirk_pex_vca_alias);
++
+ /*
+  * The IOMMU and interrupt controller on Broadcom Vulcan/Cavium ThunderX2 are
+  * associated not at the root bus, but at a bridge below. This quirk avoids
+-- 
+2.24.0
+

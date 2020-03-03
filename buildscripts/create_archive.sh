@@ -272,7 +272,7 @@ create_archive(){
 				create_UBUNTU_bootstrap "${CHROOT_DIR}"
 				;;
 			CENTOS*)
-				create_CENTOS_bootstrap "${CHROOT_DIR}" "${KS_FILE}" "${_REPO_OS}" "${_REPO_VCA}" "${_REPO_EXTRAS}"
+				create_CENTOS_bootstrap "${CHROOT_DIR}" "${KS_FILE}" "${_REPO_OS}/BaseOS" "${_REPO_VCA}" "${_REPO_EXTRAS}"
 				;;
 			*)
 				# cannot break here as environment has to be restored first

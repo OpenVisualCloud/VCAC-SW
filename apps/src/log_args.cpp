@@ -19,6 +19,7 @@
  */
 
 #include <sys/types.h>
+#include <sys/file.h>
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -26,9 +27,6 @@
 #include <sstream>
 #include <fstream>
 #include <cstdio>
-
-#include <boost/interprocess/sync/named_mutex.hpp>
-#include <boost/interprocess/sync/scoped_lock.hpp>
 
 #include "helper_funcs.h"
 
@@ -39,7 +37,7 @@ const char LOGFILE_HEADER[] = "date\tpid\tuptime\tancestors\tcmd\r\n";
 const off_t LOGFILE_SIZE_LIMIT = ((1 << 20) * 250); // 250MB per file
 
 const char LOGFILE_SHM_MUTEX[] = "vcactl_logfile";
-const unsigned int LOGFILE_MUTEX_TIMEOUT = 3; // seconds
+const unsigned int LOGFILE_LOCK_TIMEOUT = 3; // seconds
 
 /* log_args() will log arguments with which program was invoked at commandline,
  * along with other useful info.
@@ -86,15 +84,14 @@ bool log_args(int argc, char **argv) {
 }
 
 bool log_string(const std::string &msg) {
-	if (!vca_named_mutex_create(LOGFILE_SHM_MUTEX)) {
+	close_on_exit fd(open_path(LOGFILE_CURR, O_WRONLY));
+	if (!fd)
 		return false;
-	}
-	boost::interprocess::named_mutex mtx(boost::interprocess::open_or_create_t(), LOGFILE_SHM_MUTEX);
-	boost::interprocess::scoped_lock<boost::interprocess::named_mutex> lock(mtx, get_timeout(LOGFILE_MUTEX_TIMEOUT));
-	if (!lock) {
-		LOG_WARN("log_string: timeout while acquiring lock %s\n", get_shm_mutex_path(LOGFILE_SHM_MUTEX).c_str());
-		return false;
-	}
+	for (time_t now = time(NULL); flock(fd, LOCK_EX|LOCK_NB); sleep(0.2))
+		if (time(NULL) - now > LOGFILE_LOCK_TIMEOUT) {
+			LOG_WARN("log_string: timeout while acquiring lock\n");
+			return false;
+		}
 
 	struct stat stat_data = {0};
 	int ret = stat(LOGFILE_CURR, &stat_data);
