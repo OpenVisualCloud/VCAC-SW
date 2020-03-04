@@ -186,7 +186,7 @@ function generate_k3_centos_from_repo {
 }
 
 function generate_k4_centos {
-	make -j "$(nproc)" rpm \
+	make -j "$(nproc)" rpm-pkg \
 		HOME="${WORKSPACE}" \
 		KERNELRELEASE="${KER_VER}-1.${PKG_VER}.VCA" \
 		RPMVERSION="${PKG_VER}" \

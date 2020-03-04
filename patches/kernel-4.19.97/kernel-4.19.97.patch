@@ -1,0 +1,156 @@
+From 7c38fa664b1d4b8d984c8350f842d4dcb23f5ee8 Mon Sep 17 00:00:00 2001
+From: Marcin Rysztowski <marcin.rysztowski@intel.com>
+Date: Tue, 24 Mar 2015 10:43:32 +0100
+Subject: [PATCH 1/3] Add compilation and linker flags required by SDL
+
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+---
+ Makefile | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 3499df8936a1..4e6c95b42ab9 100644
+--- a/Makefile
++++ b/Makefile
+@@ -392,12 +392,12 @@ CHECK		= sparse
+ CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
+ 		  -Wbitwise -Wno-return-void -Wno-unknown-attribute $(CF)
+ NOSTDINC_FLAGS  =
+-CFLAGS_MODULE   =
++CFLAGS_MODULE   = -fstack-protector -O2 -D_FORTIFY_SOURCE=2 -Wformat
+ AFLAGS_MODULE   =
+-LDFLAGS_MODULE  =
+-CFLAGS_KERNEL	=
++LDFLAGS_MODULE  = -z noexecstack -z relro -z now
++CFLAGS_KERNEL	= -D_FORTIFY_SOURCE=2 -Wformat
+ AFLAGS_KERNEL	=
+-LDFLAGS_vmlinux =
++LDFLAGS_vmlinux	= -z noexecstack -z relro -z now
+ 
+ # Use USERINCLUDE when you must reference the UAPI directories only.
+ USERINCLUDE    := \
+-- 
+2.24.0
+
+
+From 2a4c7620e919c272860cfbbb16d10e47ca0bd9d6 Mon Sep 17 00:00:00 2001
+From: Bartosz <bartoszx.niemczewski@intel.com>
+Date: Tue, 24 Oct 2017 09:51:53 -0400
+Subject: [PATCH 2/3] Add pkg version to kernel name
+
+Signed-off-by: Bartosz <bartoszx.niemczewski@intel.com>
+Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
+---
+ Makefile | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/Makefile b/Makefile
+index 4e6c95b42ab9..f3bec0565a0a 100644
+--- a/Makefile
++++ b/Makefile
+@@ -5,6 +5,24 @@ SUBLEVEL = 97
+ EXTRAVERSION =
+ NAME = "People's Front"
+ 
++ifndef RPMVERSION
++	RPMVERSION=0.0.0
++endif
++
++ifndef PKGVERSION
++	PKGVERSION=0.0.0
++endif
++
++ifndef OS
++        OS=CENTOS
++endif
++
++ifeq ($(OS), UBUNTU)
++        EXTRAVERSION = -1.$(PKGVERSION).vca
++else
++        EXTRAVERSION = -1.$(RPMVERSION).VCA
++endif
++
+ # *DOCUMENTATION*
+ # To see a list of typical targets execute "make help"
+ # More info can be located in ./README
+-- 
+2.24.0
+
+
+From 169e70f43ad218d8d3dd879fa4ec8b4f70a0d0c9 Mon Sep 17 00:00:00 2001
+From: Slawomir Pawlowski <slawomir.pawlowski@intel.com>
+Date: Tue, 17 Sep 2019 09:20:48 +0000
+Subject: [PATCH 3/3] PCI: Add DMA alias quirk for Intel VCA NTB
+
+Intel Visual Compute Accelerator (VCA) is a family of PCIe add-in devices
+exposing computational units via Non Transparent Bridges (NTB, PEX 87xx).
+
+Similarly to MIC x200, we need to add DMA aliases to allow buffer access
+when IOMMU is enabled.
+
+Add aliases to allow computational unit access to host memory.  These
+aliases mark the whole VCA device as one IOMMU group.
+
+All possible slot numbers (0x20) are used, since we are unable to tell what
+slot is used on other side.  This quirk is intended for both host and
+computational unit sides.  The VCA devices have up to five functions: four
+for DMA channels and one additional.
+
+Link: https://lore.kernel.org/r/5683A335CC8BE1438C3C30C49DCC38DF637CED8E@IRSMSX102.ger.corp.intel.com
+Signed-off-by: Slawomir Pawlowski <slawomir.pawlowski@intel.com>
+Signed-off-by: Przemek Kitszel <przemyslawx.kitszel@intel.com>
+Signed-off-by: Bjorn Helgaas <bhelgaas@google.com>
+---
+ drivers/pci/quirks.c | 34 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+diff --git a/drivers/pci/quirks.c b/drivers/pci/quirks.c
+index 20a57a48ae1e..ae7b3a2ade0e 100644
+--- a/drivers/pci/quirks.c
++++ b/drivers/pci/quirks.c
+@@ -3986,6 +3986,40 @@ static void quirk_mic_x200_dma_alias(struct pci_dev *pdev)
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2260, quirk_mic_x200_dma_alias);
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2264, quirk_mic_x200_dma_alias);
+ 
++/*
++ * Intel Visual Compute Accelerator (VCA) is a family of PCIe add-in devices
++ * exposing computational units via Non Transparent Bridges (NTB, PEX 87xx).
++ *
++ * Similarly to MIC x200, we need to add DMA aliases to allow buffer access
++ * when IOMMU is enabled.  These aliases allow computational unit access to
++ * host memory.  These aliases mark the whole VCA device as one IOMMU
++ * group.
++ *
++ * All possible slot numbers (0x20) are used, since we are unable to tell
++ * what slot is used on other side.  This quirk is intended for both host
++ * and computational unit sides.  The VCA devices have up to five functions
++ * (four for DMA channels and one additional).
++ */
++static void quirk_pex_vca_alias(struct pci_dev *pdev)
++{
++	const unsigned int num_pci_slots = 0x20;
++	unsigned int slot;
++
++	for (slot = 0; slot < num_pci_slots; slot++) {
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot, 0x0));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot, 0x1));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot, 0x2));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot, 0x3));
++		pci_add_dma_alias(pdev, PCI_DEVFN(slot, 0x4));
++	}
++}
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2954, quirk_pex_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2955, quirk_pex_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2956, quirk_pex_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2958, quirk_pex_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x2959, quirk_pex_vca_alias);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x295A, quirk_pex_vca_alias);
++
+ /*
+  * The IOMMU and interrupt controller on Broadcom Vulcan/Cavium ThunderX2 are
+  * associated not at the root bus, but at a bridge below. This quirk avoids
+-- 
+2.24.0
+

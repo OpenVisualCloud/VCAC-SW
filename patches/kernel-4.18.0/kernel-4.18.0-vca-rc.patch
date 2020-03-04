@@ -1,7 +1,7 @@
 From 7762224630c1c0968f8729377acde26e04890af4 Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Mon, 18 Nov 2019 13:04:47 +0100
-Subject: [PATCH 01/13] Set specfile extraction path based on polished
+Subject: [PATCH 01/10] Set specfile extraction path based on polished
  KERNELRELEASE
 
 ---
@@ -28,7 +28,7 @@ index e05646dc24dc..b09d498a5250 100755
 From e038ccdb630e4875581c812ce525a10752c423fc Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Fri, 10 Jan 2020 09:50:19 +0100
-Subject: [PATCH 02/13] Provide Obsoletes/Requires/Conflicts/Provides from
+Subject: [PATCH 02/10] Provide Obsoletes/Requires/Conflicts/Provides from
  kernel.spec of CentOS kernel 4.18.0-80
 
 ---
@@ -85,7 +85,7 @@ index b09d498a5250..610282ea8cf6 100755
 From db32def3a064264bd0484e5248d8baf699d85019 Mon Sep 17 00:00:00 2001
 From: Adam Rutkowski <adam.j.rutkowski@intel.com>
 Date: Thu, 27 Nov 2014 15:47:16 +0100
-Subject: [PATCH 03/13] Fix compilation with XEN_DOM0=y
+Subject: [PATCH 03/10] Fix compilation with XEN_DOM0=y
 
 Remove references to undefined symbols:
 - MAX_INDIRECT_SEGMENTS
@@ -133,7 +133,7 @@ index a4bc74e72c39..0dde91a3efbf 100644
 From 896b029b93833152bf18b02c160bddfd44a0d9de Mon Sep 17 00:00:00 2001
 From: Marcin Rysztowski <marcin.rysztowski@intel.com>
 Date: Tue, 24 Mar 2015 10:43:32 +0100
-Subject: [PATCH 04/13] Add compilation and linker flags required by SDL
+Subject: [PATCH 04/10] Add compilation and linker flags required by SDL
 
 Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
 Signed-off-by: Bartosz <bartoszx.niemczewski@intel.com>
@@ -167,27 +167,10 @@ index 353ccafaa145..71bf5b1163da 100644
 2.24.0
 
 
-From b4186af3a52993ff539085c329314f68fb172bfc Mon Sep 17 00:00:00 2001
-From: Artur Opalinski <ArturX.Opalinski@intel.com>
-Date: Fri, 10 Jan 2020 10:18:22 +0100
-Subject: [PATCH 05/13] Added default .config file
-
----
- .config | 4340 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 4340 insertions(+)
- create mode 100644 .config
-
-diff --git a/.config b/.config
-new file mode 100644
-index 000000000000..b1e6f9597a08
--- 
-2.24.0
-
-
-From 85e23789c32e5cab92142efa9dc02c3ff773199d Mon Sep 17 00:00:00 2001
+From a87ebf4a4f7112202b5b7b12d75a8b66970ea62b Mon Sep 17 00:00:00 2001
 From: Adam Rutkowski <adam.j.rutkowski@intel.com>
 Date: Wed, 26 Aug 2015 07:05:05 -0400
-Subject: [PATCH 06/13] Allow PCI passtrough for BDW graphics despite RMRR
+Subject: [PATCH 05/10] Allow PCI passtrough for BDW graphics despite RMRR
  usage
 
 Broadwell GPU drivers for both Windows and Linux are capable of working in
@@ -243,10 +226,10 @@ index 0962d65a042e..a7a92c13708a 100644
 2.24.0
 
 
-From 0a73873dbd416c0b4447fc2db000720a93ae166f Mon Sep 17 00:00:00 2001
+From 3c938f887714a9e0222012355729ba12382c50d7 Mon Sep 17 00:00:00 2001
 From: Marcin Rysztowski <marcin.rysztowski@intel.com>
 Date: Fri, 7 Oct 2016 13:09:25 +0200
-Subject: [PATCH 07/13] vmlinux*.bz2 file moved to separeate kernel-debug
+Subject: [PATCH 06/10] vmlinux*.bz2 file moved to separeate kernel-debug
  package
 
 vmlinux*.bz2 file, containing unstripped vmlinux file, moved to separate package to limit footprint of image
@@ -295,10 +278,10 @@ index 610282ea8cf6..e569258b7401 100755
 2.24.0
 
 
-From 4698e63e727553c66dd4e0095f4ec41a81e7523b Mon Sep 17 00:00:00 2001
+From fc6397c4d32be0f3d66340e9599cdddb96829f87 Mon Sep 17 00:00:00 2001
 From: Marcin Rysztowski <marcin.rysztowski@intel.com>
 Date: Wed, 19 Oct 2016 12:54:39 +0200
-Subject: [PATCH 08/13] SKL GPU (8086:193a) recognized as VCA_GPU by IOMMU
+Subject: [PATCH 07/10] SKL GPU (8086:193a) recognized as VCA_GPU by IOMMU
 
 Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>
 Signed-off-by: Bartosz <bartoszx.niemczewski@intel.com>
@@ -324,10 +307,10 @@ index a7a92c13708a..97065c0da526 100644
 2.24.0
 
 
-From 0fd43c3d79f75844b38f27ce49a6ff48afde788a Mon Sep 17 00:00:00 2001
+From 2c23f3cf4d419c8234b95337e35ac14997146a41 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Wojciech=20Pi=C4=99tka?= <wojciechx.pietka@intel.com>
 Date: Thu, 16 Jan 2020 09:07:18 +0100
-Subject: [PATCH 09/13] Fix compilation error
+Subject: [PATCH 08/10] Fix compilation error
 
 ---
  arch/x86/kernel/setup.c | 2 +-
@@ -350,23 +333,10 @@ index fe4d5c57e1ae..df4784657591 100644
 2.24.0
 
 
-From 7e3ac1999eeb28f47e680cc93cf6d0488f08df2f Mon Sep 17 00:00:00 2001
-From: =?UTF-8?q?Wojciech=20Pi=C4=99tka?= <wojciechx.pietka@intel.com>
-Date: Thu, 16 Jan 2020 10:43:21 +0100
-Subject: [PATCH 10/13] Adjust .config
-
----
- .config | 47 +++++++++++++++++++++++++++++++++++++----------
- 1 file changed, 37 insertions(+), 10 deletions(-)
-
--- 
-2.24.0
-
-
-From c5b6c6e01f151a5b72cbcda7f827fc80989c0d56 Mon Sep 17 00:00:00 2001
+From 870027db69a98962c50a1cdb03d32aac53def0c8 Mon Sep 17 00:00:00 2001
 From: Wojciech Pietka <wojciechx.pietka@intel.com>
 Date: Fri, 17 Jan 2020 06:36:21 -0500
-Subject: [PATCH 11/13] adjust Makefile
+Subject: [PATCH 09/10] adjust Makefile
 
 ---
  Makefile         | 13 +++++++++++--
@@ -401,6 +371,7 @@ index 71bf5b1163da..40d2d2d79e43 100644
 diff --git a/Makefile.rhelver b/Makefile.rhelver
 deleted file mode 100644
 index dad836d0a482..000000000000
+--- a/Makefile.rhelver
 +++ /dev/null
 @@ -1,45 +0,0 @@
 -RHEL_MAJOR = 8
@@ -452,23 +423,10 @@ index dad836d0a482..000000000000
 2.24.0
 
 
-From 8b54bac653a3ab7e848695f6d3260bd72a67c96a Mon Sep 17 00:00:00 2001
-From: =?UTF-8?q?Wojciech=20Pi=C4=99tka?= <wojciechx.pietka@intel.com>
-Date: Wed, 22 Jan 2020 14:05:37 -0500
-Subject: [PATCH 12/13] Add original centos .config
-
----
- .config | 6425 +++++++++++++++++++++++++++++++++++++++++--------------
- 1 file changed, 4820 insertions(+), 1605 deletions(-)
-
--- 
-2.24.0
-
-
-From 6ce85ffb0028d6e4b505178c9cc1240888139f47 Mon Sep 17 00:00:00 2001
+From e02312c1b071e259f97252c83c9e8cacf8825bcf Mon Sep 17 00:00:00 2001
 From: Slawomir Pawlowski <slawomir.pawlowski@intel.com>
 Date: Tue, 17 Sep 2019 09:20:48 +0000
-Subject: [PATCH 13/13] PCI: Add DMA alias quirk for Intel VCA NTB
+Subject: [PATCH 10/10] PCI: Add DMA alias quirk for Intel VCA NTB
 
 Intel Visual Compute Accelerator (VCA) is a family of PCIe add-in devices
 exposing computational units via Non Transparent Bridges (NTB, PEX 87xx).
