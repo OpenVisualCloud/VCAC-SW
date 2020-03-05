@@ -112,7 +112,7 @@ message(STATUS "Boost_INCLUDE_DIRS = ${Boost_INCLUDE_DIRS}")
 if(CMAKE_COMPILER_IS_GNUCXX)
     message(STATUS "GCC detected, adding compile flags")
 	set(COMMON_FLAGS    "")              							  # Initialize
-    set(COMMON_FLAGS    "${COMMON_FLAGS} -Wall -Werror")              # Turn on all warnings and treat it as errors
+    set(COMMON_FLAGS    "${COMMON_FLAGS} -Wall -Werror -Wno-error=parentheses") # Turn on all warnings and treat it as errors
     set(COMMON_FLAGS    "${COMMON_FLAGS} -Wformat -Wformat-security") # Format string vulnerabilities
     set(COMMON_FLAGS    "${COMMON_FLAGS} -fstack-protector")          # Stack-based Buffer Overrun Detection
     set(COMMON_FLAGS    "${COMMON_FLAGS} -O2 -D_FORTIFY_SOURCE=2")    # Fortify source
