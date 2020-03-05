@@ -40,13 +40,17 @@ Provides host drivers for Intel® VCA cards
 	# (tested only for 693+ of the 3.10.0 line)
 	%define is_kernel_3p10p0 %(awk -F'[-.]' '/^3\.10\.0-/ && $$4 >= 693' <<< %kversion)
 	%define is_kernel_5p1p16 %(awk -F'[-.]' '/^5\.1\.16-/' <<< %kversion)
-	%define is_kernel_4p18p0 %(awk -F'[-.]' '/^4\.18\.0-/' <<< %kversion)
-	%if "%{is_kernel_3p10p0}%{is_kernel_5p1p16}%{is_kernel_4p18p0}" != ""
+	%if "%{is_kernel_3p10p0}%{is_kernel_5p1p16}" != ""
 		%define __kernelrelease %(echo %{kversion})
 	%endif
 %else
 	# to mimic the changes in RPM PACKAGE name and in RPM FILE name made during kernel build in scripts/package/mkspec using __KERNELRELEASE
-	%define __kernelrelease %(echo %{kversion} | sed -e "s/-/_/")
+	%define is_kernel_4p18p0 %(awk '/^4\.18\.0/' <<< %kversion)
+	%if "%{is_kernel_4p18p0}" != ""
+		%define __kernelrelease %(echo %{kversion} | sed -e "s/-/_/;s/-/_/")
+	%else
+		%define __kernelrelease %(echo %{kversion} | sed -e "s/-/_/")
+	%endif
 %endif
 %define rpmname $(name)-%{__kernelrelease}
 %define rpmdevelname $(name)-devel-%{__kernelrelease}
