@@ -758,6 +758,8 @@ int main(int argc, char *argv[])
 	interpret_error_code(rc, "mkfifo " MSG_FIFO_FILE " error: %s! Exiting...\n");
 	rc = chown(MSG_FIFO_FILE, -1, grp);
 	interpret_error_code(rc, "chown(MSG_FIFO_FILE): %s\n");
+	rc = chmod(MSG_FIFO_FILE, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+	interpret_error_code(rc, "chmod(MSG_FIFO_FILE): %s\n");
 
 	switch (fork()) {
 	case 0:
