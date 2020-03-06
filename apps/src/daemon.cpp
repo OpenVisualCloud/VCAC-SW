@@ -240,6 +240,15 @@ static void *fifo_mgr(void *)
 	interpret_error_code(pfd[1].fd, "Cannot open msg_fifo file: " MSG_FIFO_FILE "! Exiting...\n");
 	err = fcntl(pfd[1].fd, F_SETFL, O_NONBLOCK);
 	interpret_error_code(err, "File control function error: " MSG_FIFO_FILE "! Exiting...\n");
+
+	/* allow scan_for_devices() execution from now on */
+	err = pthread_mutex_unlock(&scan_for_devices_lock);
+	if (err != 0) {
+		vcasslog("pthread_mutex_unlock failed in function fifo_mgr()"
+			" with error message: %s\n", strerror(err));
+		exit(2);
+	}
+
 	for (;;) {
 		err = poll(pfd, 2, -1);
 		if (0 <= err) {
