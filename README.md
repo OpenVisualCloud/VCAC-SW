@@ -3,7 +3,7 @@
 ## Notice
 BIOS files necessary to run end-to-end solution are not provided here yet.
 User Guide / documentation describing end-to-end solution is not provided here yet.
-For now, intended audience is limited.
+For now, intended audience is limited. 
 
 ## Purpose
 This repository contains:
