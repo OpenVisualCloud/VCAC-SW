@@ -193,7 +193,7 @@ add_to_bridge(){
 	$IP link set dev $CARD_DEV up
 
 	log "Adding $CARD_DEV device to bridge $BRIDGE_DEV"
-	$BRCTL add $BRIDGE_DEV $CARD_DEV
+	$IP link set $CARD_DEV master $BRIDGE_DEV
 }
 
 PARAM1=$1
