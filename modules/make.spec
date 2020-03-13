@@ -142,7 +142,6 @@ fi
 /lib/modules/%{kreleaseversion}/extra/vca/vca_csa/vca_csa.ko
 /lib/modules/%{kreleaseversion}/extra/vca/blockio/vcablk_bckend.ko
 /lib/modules/%{kreleaseversion}/extra/vca/blockio/vcablkfe.ko
-/lib/modules/%{kreleaseversion}/extra/vca/pxe/vcapxe.ko
 /lib/modules/%{kreleaseversion}/extra/vca/vca_virtio/vca_virtio.ko
 /lib/modules/%{kreleaseversion}/extra/vca/vca_virtio/vca_virtio_net.ko
 /lib/modules/%{kreleaseversion}/extra/vca/vca_virtio/vca_virtio_ring.ko

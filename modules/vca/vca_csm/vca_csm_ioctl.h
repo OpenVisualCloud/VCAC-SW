@@ -139,6 +139,4 @@ struct vca_csm_ioctl_agent_cmd {
 
 #define LBP_SET_SERIAL_NR _IOWR('s', 23, struct vca_csm_ioctl_mem_desc *)
 
-#define LBP_BOOT_VIA_PXE _IOWR('s', 24, enum vca_lbp_retval *)
-
 #endif

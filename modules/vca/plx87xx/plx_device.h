@@ -170,9 +170,6 @@ struct plx_device {
 		int ftb_db;
 	} blockio;
 
-
-	struct vcapxe_device* pxe_dev;
-
 	u8 mac_addr[6];
 };
 
@@ -204,7 +201,6 @@ extern struct vca_mgr_extd_hw_ops vca_mgr_extd_plx_hw_ops;
 extern struct vca_csa_hw_ops vca_csa_plx_hw_ops;
 extern struct vca_csa_hw_ops vca_csa_plx_ddhw_ops;
 extern struct plx_blockio_hw_ops blockio_hw_ops;
-extern struct plx_pxe_hw_ops pxe_hw_ops;
 
 /* Grace period after triggering reset GPIO */
 #define RESET_GRACE_PERIOD_MS	2000

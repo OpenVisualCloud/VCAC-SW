@@ -45,22 +45,15 @@
 #define PV_ROOTPORT		0xc
 #define PV_DMABUS		0x10
 
-
-static bool kvm= false;
-module_param( kvm, bool, S_IRUGO|S_IWUSR);
-MODULE_PARM_DESC( kvm, "Extension to get physical a bus number of passtrough PCI device");
-
 static bool DontCheckEepromCrc = false;
 module_param(DontCheckEepromCrc, bool, 0644);
 MODULE_PARM_DESC(DontCheckEepromCrc, "Skip crc check for EEPROM");
-
 
 bool kvm_check_guest(void)
 {
 	unsigned int eax, ebx, ecx, edx;
 	char s[12];
 	unsigned int *i;
-	if( !kvm) return 0;
 
 	/* KVM_CPUID_SIGNATURE */
 	eax = 0x40000000;

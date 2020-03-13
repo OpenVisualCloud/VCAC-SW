@@ -142,11 +142,6 @@ static int _dma_map_sg(struct device *dev, struct scatterlist *sg, enum dma_data
 	int i,j;
 	int ret = 0;
 
-	if (dir == DMA_FROM_DEVICE) {
-		/*For memcpy to flush all transfer, need read last write byte.*/
-		dir = DMA_BIDIRECTIONAL;
-	}
-
 	for (i = 0, s=sg; i < nents; s++, i++) {
 		s->dma_address = dma_map_single(dev, sg_virt(s), s->length, dir);
 		if(!s->dma_address) {
@@ -164,11 +159,6 @@ static void _dma_unmap_sg(struct device *dev, struct scatterlist *sg, enum dma_d
 	size_t nents = sg_nents(sg);
 	struct scatterlist *s;
 	int i;
-
-	if (dir == DMA_FROM_DEVICE) {
-		/*For memcpy to flush all transfer, need read last write byte.*/
-		dir = DMA_BIDIRECTIONAL;
-	}
 
 	for (i = 0, s=sg; i < nents; s++, i++) {
 		dma_unmap_single(dev, s->dma_address, s->length, dir);
@@ -520,11 +510,9 @@ EXPORT_SYMBOL_GPL(vca_virtqueue_kick);
 
 static inline void __unmap_single(struct device *dev, struct vring_desc *desc)
 {
-	/*For memcpy to flush all transfer, need read last write byte.*/
-	enum dma_data_direction dir = desc->flags & VRING_DESC_F_WRITE ?
-			DMA_BIDIRECTIONAL : DMA_TO_DEVICE;
-
-	dma_unmap_single(dev, desc->addr, desc->len, dir);
+	dma_unmap_single(dev, desc->addr, desc->len,
+			 desc->flags & VRING_DESC_F_WRITE ?
+			 DMA_FROM_DEVICE : DMA_TO_DEVICE);
 }
 
 static void detach_buf(struct vring_virtqueue *vq, unsigned int head)

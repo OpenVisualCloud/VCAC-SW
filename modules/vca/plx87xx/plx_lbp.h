@@ -61,7 +61,6 @@ enum vca_lbp_retval plx_lbp_handshake(struct plx_device *xdev);
 enum vca_lbp_retval plx_lbp_boot_ramdisk(struct plx_device *xdev,
  void __user * img, size_t img_size);
 enum vca_lbp_retval plx_lbp_boot_blkdisk(struct plx_device *xdev);
-enum vca_lbp_retval plx_lbp_boot_via_pxe(struct plx_device *xdev);
 enum vca_lbp_retval plx_lbp_flash_bios(struct plx_device *xdev,
  void __user * bios_file, size_t bios_file_size);
 enum vca_lbp_retval plx_lbp_clear_smb_event_log(struct plx_device *xdev,

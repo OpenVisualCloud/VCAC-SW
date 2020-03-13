@@ -96,13 +96,6 @@ csa_mem_show(struct device *dev, struct device_attribute *attr,
 	case VCA_AGENT_SN_INFO:
 		count = snprintf(buf, PAGE_SIZE, "SN");
 		break;
-	case VCA_AGENT_MODE_DMA:
-		strcpy(buf, "mode_dma");
-		return 8;
-	case VCA_AGENT_MODE_MEMCPY:
-		strcpy(buf, "mode_memcpy");
-		return 11;
-	case VCA_AGENT_DMA_INFO: strcpy(buf, "dma_info"); return 8;
 	default:
 		buf[0] = 0;
 		count = 0;

@@ -24,7 +24,6 @@
 #include <linux/version.h>
 #include "plx_dma.h"
 #include <linux/vmalloc.h>
-#include <linux/kthread.h>
 
 #include "../common/vca_common.h"
 #include "../plx87xx/plx_intr.h"
@@ -122,38 +121,6 @@ tx_error:
 	return -ENOMEM;
 }
 
-
-static int plx_watchdog_thread_fn(void *data)
-{
-	struct plx_dma_chan *ch = (struct plx_dma_chan *)data;
-	struct device *dev = plx_dma_ch_to_device(ch);
-	u32 last_tail = 0;
-	unsigned long jiffies_last_update = 0;
-	dev_info(dev, "%s dma watchdog start\n", __func__);
-	while (ch->watchdog.watchdog_thread_run) {
-		spin_lock(&ch->cleanup_lock); //Protect watchdog when long wait in callback
-		if (last_tail != READ_ONCE(ch->last_tail) || READ_ONCE(ch->last_tail) == READ_ONCE(ch->head)) {
-			last_tail = READ_ONCE(ch->last_tail);
-			jiffies_last_update = jiffies;
-		}
-		spin_unlock(&ch->cleanup_lock);
-		if ( (READ_ONCE(ch->last_tail) != READ_ONCE(ch->head)) && (time_after_eq(jiffies, jiffies_last_update  +  msecs_to_jiffies(5000)))) {
-			if (ch->watchdog.watchdog_enable) {
-				dev_err(dev, "%s dma watchdog detect hang\n", __func__);
-				plx_set_abort(ch);
-				break;
-			} else {
-				dev_info(dev, "%s dma watchdog detect hang, ignore because watchdog is disabled\n", __func__);
-			}
-		}
-		usleep_range(1000000, 1000001); //sleep 1s
-	}
-	dev_info(dev, "%s dma watchdog end\n", __func__);
-	complete(&ch->watchdog.watchdog_thread_done);
-	do_exit(0);
-	return 0;
-}
-
 /*
  * Clearing desc ring registers seems to get rid of DMA engine hang (HW tail
  * stuck at 0) we sometimes see after unloading/reloading the drivers.
@@ -210,7 +177,7 @@ static inline void plx_dma_enable_chan(struct plx_dma_chan *ch)
 	if (ctrl_reg & PLX_DMA_CTRL_IN_PROGRESS) {
 		struct device *dev = plx_dma_ch_to_device(ch);
 		dev_err(dev, "%s dma hang detected 0x%x\n", __func__, ctrl_reg);
-		plx_set_dma_mode(ch, DMA_MODE_HANG, DMA_MODE_HANG);
+		ch->dma_hang = true;
 	}
 
 	/* Copy bits with configuration [29:13], Source Maximum Transfer Size,
@@ -341,7 +308,6 @@ static void plx_dma_cleanup(struct plx_dma_chan *ch)
 			}
 		}
 
-		wake_up(&ch->watchdog.watchdog_event);
 		tx = &ch->tx_array[last_tail];
 		if (tx->cookie) {
 			BUG_ON(tx->cookie < DMA_MIN_COOKIE);
@@ -352,15 +318,6 @@ static void plx_dma_cleanup(struct plx_dma_chan *ch)
 				tx->callback = NULL;
 			}
 		}
-
-		if (ch->watchdog.callback_wait_repeat) {
-			u32 r = 0;
-			ch->watchdog.callback_wait_repeat--;
-			for (r = 0; r < ch->watchdog.callback_wait_ms/10; ++r) {
-					usleep_range(10000, 10001);
-			}
-		}
-
 		last_tail = plx_dma_ring_inc(last_tail);
 	}
 	/* finish all completion callbacks before incrementing tail */
@@ -442,24 +399,10 @@ static int plx_dma_chan_init(struct plx_dma_chan *ch)
 	} else
 		dev_info(dev, "%s: plx_dma_capabilities: 0x%x, skipping reset\n", __func__, plx_caps);
 #endif // RESET_PLX_ON_DMA_INIT
-	ch->dma_hang_mode = 0;
-	ch->watchdog.watchdog_thread_run = false;
 	rc = plx_dma_alloc_desc_ring(ch);
 	if (!rc) {
-		struct task_struct *thread;
 		plx_dma_chan_setup(ch);
 		plx_debug_init();
-
-		init_completion(&ch->watchdog.watchdog_thread_done);
-		init_waitqueue_head(&ch->watchdog.watchdog_event);
-		thread = kthread_create(plx_watchdog_thread_fn, ch, "plx-dma-watchdog");
-		if (thread) {
-			ch->watchdog.watchdog_thread_run = true;
-			wake_up_process(thread);
-		}
-		ch->watchdog.callback_wait_repeat = 0;
-		ch->watchdog.callback_wait_ms= 0;
-		ch->watchdog.watchdog_enable = 1;
 	}
 	else dev_err(dev, "%s ret %d\n", __func__, rc);
 	return rc;
@@ -497,16 +440,6 @@ u32 plx_get_hw_next_desc(struct plx_dma_chan *ch)
 static void plx_dma_free_chan_resources(struct dma_chan *ch)
 {
 	struct plx_dma_chan *plx_ch = to_plx_dma_chan(ch);
-	struct device *dev = plx_dma_ch_to_device(plx_ch);
-	int res;
-
-	if (plx_ch->watchdog.watchdog_thread_run) {
-		plx_ch->watchdog.watchdog_thread_run = false;
-		res = wait_for_completion_interruptible(&plx_ch->watchdog.watchdog_thread_done);
-		if (res < 0) {
-			dev_err(dev, "%s watchdog_thread_completion ret %d\n", __func__, res);
-		}
-	}
 
 	plx_dma_disable_chan(plx_ch);
 	plx_dma_chan_mask_intr(plx_ch);
@@ -546,11 +479,6 @@ plx_dma_is_tx_complete(struct dma_chan *ch, dma_cookie_t cookie,
 		  dma_cookie_t *last, dma_cookie_t *used)
 {
 	struct plx_dma_chan *plx_ch = to_plx_dma_chan(ch);
-
-	if (plx_ch->dma_hang_mode) {
-		return DMA_ERROR;
-	}
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 13, 0)
 	if (DMA_SUCCESS != plx_dma_cookie_status(ch, cookie, last, used))
 #else
@@ -738,15 +666,6 @@ plx_dma_prep_memcpy_lock(struct dma_chan *ch, dma_addr_t dma_dest,
 	struct device *dev = plx_dma_ch_to_device(plx_ch);
 	int result;
 
-	/* Lock before check flag, to protect reordering finish dma during change mode */
-	spin_lock(&plx_ch->prep_lock);
-	if (plx_ch->dma_hang_mode & (DMA_MODE_HANG | DMA_MODE_FORCE_FAIL)) {
-		spin_unlock(&plx_ch->prep_lock);
-		return NULL;
-	} else if (plx_ch->dma_hang_mode & (DMA_MODE_FAULT_INJECTION)) {
-		len = 0;
-	}
-
 	if ((dma_src & PLX_DMA_ALIGN_MASK) ||
 		(dma_dest & PLX_DMA_ALIGN_MASK) ||
 		(len & PLX_DMA_ALIGN_MASK)) {
@@ -755,16 +674,14 @@ plx_dma_prep_memcpy_lock(struct dma_chan *ch, dma_addr_t dma_dest,
 				__func__, PLX_DMA_ALIGN_BYTES, dma_src, dma_dest, len);
 	}
 
+	spin_lock(&plx_ch->prep_lock);
 	result = plx_dma_prog_memcpy_desc(plx_ch, dma_src, dma_dest, len, flags);
+	if (result >= 0)
+		return allocate_tx(plx_ch, flags);
 
-	if (result < 0) {
-		dev_err(dev, "Error enqueueing dma, error=%d\n", result);
-		spin_unlock(&plx_ch->prep_lock);
-		return NULL;
-	}
-
-	/* Lock 'prep_lock' will be unlocked by plx_dma_tx_submit_unlock() */
-	return allocate_tx(plx_ch, flags);
+	dev_err(dev, "Error enqueueing dma, error=%d\n", result);
+	spin_unlock(&plx_ch->prep_lock);
+	return NULL;
 }
 
 static struct dma_async_tx_descriptor *
@@ -789,19 +706,19 @@ static irqreturn_t plx_dma_thread_fn(int irq, void *data)
 	struct device *dev = plx_dma_ch_to_device(ch);
 	u32 reg;
 
-	if (ch->dma_hang_mode & DMA_MODE_HANG)
+	if (ch->dma_hang)
 		return IRQ_HANDLED;
 
 	plx_dma_cleanup(&plx_dma_dev->plx_chan);
 
-	reg= atomic_xchg( &plx_dma_dev->intx, 0);
+	reg = plx_dma_ack_interrupt(&plx_dma_dev->plx_chan);
 	intr_status = !!(reg & PLX_DMA_DESC_DONE_INTR_STATUS);
 	error = !!(reg & PLX_DMA_ERROR_STATUS);
 	if (error) {
 		/* dma engine is stuck, PLX soft or fundamental reset
 		 * is required to recover from this */
 		dev_err(dev, "%s dma hang detect 0x%x\n", __func__, reg);
-		plx_set_dma_mode(ch, DMA_MODE_HANG, DMA_MODE_HANG);
+		ch->dma_hang = true;
 		return IRQ_HANDLED;
 	}
 
@@ -824,10 +741,10 @@ static irqreturn_t plx_dma_thread_fn(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t plx_dma_intr_handler(int irq,struct plx_dma_device* plx_dma_dev)
+static irqreturn_t plx_dma_intr_handler(int irq, void *data)
 {
-	atomic_or( plx_dma_ack_interrupt( &plx_dma_dev->plx_chan), &plx_dma_dev->intx);
-	return plx_dma_dev->intx.counter? IRQ_WAKE_THREAD: IRQ_NONE;
+	/* ((struct plx_dma_device *)data);*/
+	return IRQ_WAKE_THREAD;
 }
 
 static int plx_dma_setup_irq(struct plx_dma_device *plx_dma_dev)
@@ -841,7 +758,7 @@ static int plx_dma_setup_irq(struct plx_dma_device *plx_dma_dev)
 	if (rc)
 		pci_intx(pdev, 1);
 
-	rc= devm_request_threaded_irq( dev, pdev->irq,(irq_handler_t) plx_dma_intr_handler,
+	rc = devm_request_threaded_irq(dev, pdev->irq, plx_dma_intr_handler,
 					 plx_dma_thread_fn, IRQF_SHARED,
 					 "plx-dma-intr", plx_dma_dev);
 	if (rc)
@@ -962,172 +879,4 @@ void plx_dma_remove(struct plx_dma_device *plx_dma_dev)
 {
 	plx_unregister_dma_device(plx_dma_dev);
 	plx_dma_uninit(plx_dma_dev);
-}
-
-void plx_set_abort(struct plx_dma_chan *ch)
-{
-	struct device *dev = plx_dma_ch_to_device(ch);
-	unsigned long abort_time_start;
-	u32 ctrl_reg_org;
-	u32 ctrl_reg_check;
-
-	/* Lock to protect operations on ch->ctrl_reg */
-	spin_lock(&ch->prep_lock);
-
-	dev_err(dev, "%s: Set DMA Abort", __func__);
-	abort_time_start = jiffies;
-	/* Before start abort, plx_dma_is_tx_complete() should start return errors.
-	 * After abort, before dma hang comming, all transfers need be marked as failed. */
-	ch->dma_hang_mode |=  DMA_MODE_ABORT;
-
-	ctrl_reg_org = ch->ctrl_reg;
-	/* Set DMA Abort flag*/
-	ch->ctrl_reg |= PLX_DMA_CTRL_ABORT;
-	/* Write DMA abort to register. Not write to register directly,
-	 * because issue_pending can override register from other context.*/
-	plx_dma_issue_pending(&(ch->chan));
-
-	while (1) {
-		ctrl_reg_check = plx_dma_ch_reg_read(ch, PLX_DMA_CTRL_STATUS);
-		if (ctrl_reg_check & PLX_DMA_CTRL_ABORT_DONE_STATUS) {
-			dev_err(dev, "%s: DMA Abort DONE! Time: %u [ms]\n", __func__,
-					jiffies_to_msecs(jiffies - abort_time_start));
-			break;
-		} else if (time_after_eq(jiffies, abort_time_start + msecs_to_jiffies(5000))) {
-			dev_err(dev, "%s: DMA Abort FAILED (Timeout %u [ms])!\n", __func__,
-					jiffies_to_msecs(jiffies - abort_time_start));
-			break;
-		}
-	}
-	ch->ctrl_reg = ctrl_reg_org;
-	spin_unlock(&ch->prep_lock);
-}
-
-static void plx_dma_cleanup_force(struct plx_dma_chan *ch)
-{
-	/* call callbacks to all errors */
-	struct dma_async_tx_descriptor *tx;
-	u32 last_tail;
-	u32 cached_head;
-
-	spin_lock(&ch->cleanup_lock);
-	/*
-	 * Use a cached head rather than using ch->head directly, since a
-	 * different thread can be updating ch->head potentially leading to an
-	 * infinite loop below.
-	 */
-	cached_head = READ_ONCE(ch->head);
-	/*
-	 * This is the barrier pair for smp_wmb() in fn.
-	 * plx_dma_tx_submit_unlock. It's required so that we read the
-	 * updated cookie value from tx->cookie.
-	 */
-	smp_rmb();
-
-	for (last_tail = ch->last_tail; last_tail != cached_head;) {
-		tx = &ch->tx_array[last_tail];
-		if (tx->cookie) {
-			BUG_ON(tx->cookie < DMA_MIN_COOKIE);
-			completed_cookie_container(tx->chan)->completed_cookie = tx->cookie;
-			tx->cookie = 0;
-			if (tx->callback) {
-				tx->callback(tx->callback_param);
-				tx->callback = NULL;
-			}
-		}
-		last_tail = plx_dma_ring_inc(last_tail);
-	}
-	/* finish all completion callbacks before incrementing tail */
-	smp_mb();
-	ch->last_tail = last_tail;
-	spin_unlock(&ch->cleanup_lock);
-}
-
-static int plx_finish_all_transfers(struct plx_dma_chan *ch)
-{
-	struct device *dev = plx_dma_ch_to_device(ch);
-	u64 timeout = msecs_to_jiffies(5000);
-	unsigned long dma_sync_wait_deadline =  jiffies + timeout;
-	u32 tail = ch->last_tail;
-	u32 head = READ_ONCE(ch->head);
-
-	/* Wait to finish all transfers, and Dynamic detect DMA HANG when timeout. */
-	while (READ_ONCE(ch->last_tail) != READ_ONCE(ch->head)) {
-		if (time_after_eq(jiffies, dma_sync_wait_deadline)) {
-			dev_err(dev, "%s dma hang detected (Timeout finish transfers)\n", __func__);
-			return -ETIME;
-		}
-		plx_dma_issue_pending(&ch->chan);
-		plx_dma_cleanup(ch);
-		if (tail != ch->last_tail || head != READ_ONCE(ch->head)) {
-			tail = ch->last_tail;
-			head = READ_ONCE(ch->head);
-			dma_sync_wait_deadline = jiffies + timeout;
-		}
-	}
-	return 0;
-}
-
-void plx_set_dma_mode(struct plx_dma_chan *ch, u32 mask, u32 value)
-{
-	struct device *dev = plx_dma_ch_to_device(ch);
-	u32 mode;
-
-	spin_lock(&ch->prep_lock);
-	mode = (ch->dma_hang_mode & ~mask) | (mask & value);
-
-	if (( mode | ch->dma_hang_mode) & DMA_MODE_HANG) {
-		/* When DMA HANG, can not change mode */
-		mode = DMA_MODE_HANG | DMA_MODE_FORCE_FAIL;
-	}
-	if (ch->dma_hang_mode != mode) {
-		bool finish_transfers = false;
-		bool finish_transfers_force = false;
-
-		if (mode & DMA_MODE_HANG) {
-			finish_transfers_force = true;
-		} else{
-			if ((ch->dma_hang_mode  & DMA_MODE_FORCE_FAIL)
-					< (mode & DMA_MODE_FORCE_FAIL)) {
-				/*For fail force finish transfer when try to start fail force,
-				 * to protect reordering finish packages*/
-				finish_transfers = true;
-			}
-			if ((ch->dma_hang_mode & DMA_MODE_FAULT_INJECTION)
-					> (mode & DMA_MODE_FAULT_INJECTION)) {
-				/* For fault injection finish transfers when disable,
-				 * to call all actual broken transfers with error. */
-				finish_transfers = true;
-			}
-		}
-		if (finish_transfers) {
-			if (plx_finish_all_transfers(ch)) {
-				//Detect DMA HANG
-				finish_transfers_force = true;
-			}
-		}
-		if (finish_transfers_force) {
-			/* Before force finish transfers,
-			 * plx_dma_is_tx_complete() should start return errors. */
-			ch->dma_hang_mode |= DMA_MODE_HANG;
-			mode = DMA_MODE_HANG | DMA_MODE_FORCE_FAIL;
-			plx_dma_cleanup_force(ch);
-		}
-		if ((ch->dma_hang_mode ^ mode) & DMA_MODE_FAULT_INJECTION) {
-			if (mode & DMA_MODE_FAULT_INJECTION) {
-				dev_err(dev, "Set DMA Fault Injection ON");
-			} else {
-				dev_err(dev, "Set DMA Fault Injection OFF");
-			}
-		}
-		if ((ch->dma_hang_mode ^ mode) & DMA_MODE_FORCE_FAIL) {
-			if (mode & DMA_MODE_FORCE_FAIL) {
-				dev_info(dev, "Set DMA Mode FORCE FAIL");
-			} else {
-				dev_info(dev, "Set DMA Mode HW");
-			}
-		}
-		ch->dma_hang_mode = mode;
-	}
-	spin_unlock(&ch->prep_lock);
 }

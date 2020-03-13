@@ -155,6 +155,45 @@ static const struct file_operations plx_memory_read_ops = {
 	.release = single_release
 };
 
+static int plx_memory_write_show(struct seq_file *s, void *pos)
+{
+	struct plx_device *xdev = s->private;
+	void *va = kmalloc(4096, GFP_KERNEL);
+	dma_addr_t daddr;
+	int link_side = 0;
+
+	if (xdev->link_side) {
+		link_side = 1;
+	}
+
+	memset(va, 0xac, 4096);
+	daddr = dma_map_single(&xdev->pdev->dev, va, 4096, DMA_BIDIRECTIONAL);
+
+	CHECK_DMA_ZONE(&xdev->pdev->dev, daddr);
+
+	plx_write_spad(xdev, 0, daddr);
+	plx_write_spad(xdev, 1, daddr >> 32);
+
+	plx_write_spad(xdev, 2, (dma_addr_t)((uintptr_t)va | link_side));
+	plx_write_spad(xdev, 3, (dma_addr_t)va >> 32);
+
+	seq_printf(s, "daddr 0x%llx\n", daddr);
+	seq_printf(s, "laddr 0x%llx link_side: %i\n", (dma_addr_t)va, link_side);
+	return 0;
+}
+
+static int plx_memory_write_debug_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, plx_memory_write_show, inode->i_private);
+}
+
+static const struct file_operations plx_memory_write_ops = {
+	.owner   = THIS_MODULE,
+	.open    = plx_memory_write_debug_open,
+	.read    = seq_read,
+	.llseek  = seq_lseek,
+	.release = single_release
+};
 
 u64 read_offset;
 u64 read_local_offset;
@@ -925,54 +964,6 @@ static ssize_t plx_read_peer(struct file* f, char __user* u, size_t s, loff_t* o
 }
 
 
-static ssize_t plx_read_dma0(struct file* f, char __user* u, size_t s, loff_t* o) {
-    struct plx_device* xdev= f->private_data;
-    if(( s>= 4)&&!( *o& ~0xffc)) // must be aligned to 4 and be on 1 page
-    {
-        put_user( plx_mmio_read( &xdev->mmio, 0x21000+ *o),(u32 __user*) u);
-        *o+= 4;
-        return 4;
-    }
-    return ( *o== PAGE_SIZE)? 0: -EIO;
-}
-
-
-static ssize_t plx_read_dma1(struct file* f, char __user* u, size_t s, loff_t* o) {
-    struct plx_device* xdev= f->private_data;
-    if(( s>= 4)&&!( *o& ~0xffc)) // must be aligned to 4 and be on 1 page
-    {
-        put_user( plx_mmio_read( &xdev->mmio, 0x22000+ *o),(u32 __user*) u);
-        *o+= 4;
-        return 4;
-    }
-    return ( *o== PAGE_SIZE)? 0: -EIO;
-}
-
-
-static ssize_t plx_read_dma2(struct file* f, char __user* u, size_t s, loff_t* o) {
-    struct plx_device* xdev= f->private_data;
-    if(( s>= 4)&&!( *o& ~0xffc)) // must be aligned to 4 and be on 1 page
-    {
-        put_user( plx_mmio_read( &xdev->mmio, 0x23000+ *o),(u32 __user*) u);
-        *o+= 4;
-        return 4;
-    }
-    return ( *o== PAGE_SIZE)? 0: -EIO;
-}
-
-
-static ssize_t plx_read_dma3(struct file* f, char __user* u, size_t s, loff_t* o) {
-    struct plx_device* xdev= f->private_data;
-    if(( s>= 4)&&!( *o& ~0xffc)) // must be aligned to 4 and be on 1 page
-    {
-        put_user( plx_mmio_read( &xdev->mmio, 0x24000+ *o),(u32 __user*) u);
-        *o+= 4;
-        return 4;
-    }
-    return ( *o== PAGE_SIZE)? 0: -EIO;
-}
-
-
 static int plx_open(struct inode* i, struct file* f) {
 	struct plx_device* xdev=(struct plx_device*) i->i_private;
 	f->private_data= xdev;
@@ -1006,6 +997,9 @@ void plx_create_debug_dir(struct plx_device *xdev)
 	debugfs_create_file("intr_send", 0444, xdev->dbg_dir, xdev,
 			    &intr_send_ops);
 #if PLX_MEM_DEBUG
+	debugfs_create_file("memory_write", 0444, xdev->dbg_dir, xdev,
+			    &plx_memory_write_ops);
+
 	debugfs_create_file("memory_read", 0444, xdev->dbg_dir, xdev,
 			    &plx_memory_read_ops);
 
@@ -1044,20 +1038,14 @@ void plx_create_debug_dir(struct plx_device *xdev)
 	default:;
 	}
 	{
-		struct Ops { char name[16]; unsigned size; struct file_operations ops;};
-		static const struct Ops ops[]= {
-			{ "0.dma", PAGE_SIZE, { .read= plx_read_dma0, .open = plx_open, .owner= THIS_MODULE} },
-			{ "1.dma", PAGE_SIZE, { .read= plx_read_dma1, .open = plx_open, .owner= THIS_MODULE} },
-			{ "2.dma", PAGE_SIZE, { .read= plx_read_dma2, .open = plx_open, .owner= THIS_MODULE} },
-			{ "3.dma", PAGE_SIZE, { .read= plx_read_dma3, .open = plx_open, .owner= THIS_MODULE} },
-			{ "base.ntb", PAGE_SIZE, { .read= plx_read_base, .open = plx_open, .owner= THIS_MODULE} },
-			{ "peer.ntb", PAGE_SIZE, { .read= plx_read_peer, .open = plx_open, .owner= THIS_MODULE} },
-		};
-		struct Ops const* i;
-		for( i= ops+sizeof( ops)/sizeof( *ops)- 1; ops<= i; --i) {
-			struct dentry* d= debugfs_create_file( i->name, 0440, xdev->dbg_dir, xdev, &i->ops);
-			if(!IS_ERR_OR_NULL( d)) d->d_inode->i_size= i->size;
-		}
+		static const struct file_operations ops = { .read= plx_read_base, .open = plx_open, .owner= THIS_MODULE};
+		struct dentry* d= debugfs_create_file( "base.ntb", 0440, xdev->dbg_dir, xdev, &ops);
+		if(!IS_ERR_OR_NULL( d)) d->d_inode->i_size= PAGE_SIZE;
+	}
+	{
+		static const struct file_operations ops = { .read= plx_read_peer, .open = plx_open, .owner= THIS_MODULE};
+		struct dentry* d= debugfs_create_file( "peer.ntb", 0440, xdev->dbg_dir, xdev, &ops);
+		if(!IS_ERR_OR_NULL( d)) d->d_inode->i_size= PAGE_SIZE;
 	}
 }
 

@@ -286,7 +286,6 @@ int plx_alm_add_entry(struct plx_alm* mngr,
 	if (!size || size > mngr->segment_size * mngr->segments_num) {
 		dev_err(&pdev->dev, "request for allocation %s\n",
 			!size ? "with zero size" : "too big for translation");
-		WARN_ONCE(!size, "%s invalid size==0 requested\n", __func__);
 		rc = -ENOMEM;
 		goto finish;
 	}

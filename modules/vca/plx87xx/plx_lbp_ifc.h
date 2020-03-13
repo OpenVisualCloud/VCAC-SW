@@ -64,7 +64,6 @@ enum PLX_LBP_SPAD {
 #define PLX_LBP_i7_AFTER_REBOOT (1 << 20)
 #define PLX_LBP_i7_POWER_DOWN (1 << 21)
 #define PLX_LBP_i7_POWERING_DOWN (1 << 22)
-#define PLX_LBP_i7_BOOTING_PXE (1 << 23)
 
 #define PLX_LBP_i7_ANY_ERROR (PLX_LBP_i7_UEFI_ERROR | PLX_LBP_i7_GENERAL_ERROR)
 
@@ -137,7 +136,6 @@ enum PLX_LBP_CMD {
 	PLX_LBP_CMD_GET_PARAM,
 	PLX_LBP_CMD_CLEAR_ERROR,
 	PLX_LBP_CMD_BOOT_BLOCK_IO,
-	PLX_LBP_CMD_BOOT_PXE,
 };
 
 /* definitions of parameters used with PLX_LBP_CMD_SET_PARAM and
@@ -241,7 +239,6 @@ enum PLX_LBP_ERROR {
 	PLX_LBP_i7_ERROR_SET_PARAM,
 	PLX_LBP_i7_ERROR_BOOT_BLOCK_IO,
 	PLX_LBP_i7_ERROR_GET_PARAM,
-    PLX_LBP_i7_ERROR_BOOT_PXE,
 };
 
 /* doorbell interrupt for the card BIOS to notify host about

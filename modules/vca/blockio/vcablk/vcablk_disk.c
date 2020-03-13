@@ -116,8 +116,7 @@ struct vcablk_disk {
 	bool read_only;
 	int dev_id;
 
-	volatile bool request_thread_run; /* Request task work flag */
-	struct completion request_thread_done;
+	struct task_struct	*request_thread;   /* Request task */
 	wait_queue_head_t	request_event;     /* wait queue for incoming requests */
 	wait_queue_head_t	request_ring_wait; /* wait queue for release request_ring */
 	int bio_done_db;
@@ -175,13 +174,12 @@ vcablk_disk_request_clean(struct vcablk_disk *dev,
 						map->size,
 						map->dir);
 	}
-	/* Clear .id, to notify that request ended */
-	bio_context->id = 0;
+	/* Clean bvec_ctxs_idx, to check that request ended */
 	bio_context->bvec_ctxs_idx = 0;
 	spin_lock(&dev->bio_context_pool_lock);
 	vcablk_pool_push(dev->bio_context_pool, bio_context);
 	spin_unlock(&dev->bio_context_pool_lock);
-	wake_up_all(&dev->bio_context_pool_wait);
+	wake_up(&dev->bio_context_pool_wait);
 }
 
 static void
@@ -381,25 +379,31 @@ vcablk_disk_get_bio_context(struct vcablk_disk *dev,
 		int (*stop_f)(struct vcablk_disk *))
 {
 	struct vcablk_bio_context *bio_context = NULL;
-	__u16 uninitialized_var(id);
+	__u16 id;
 
-	while (!bio_context) {
-		/* Pooling TIMEOUT_SEC on free bio context */
+	while (!vcablk_is_available(dev->bio_context_pool)
+			&& (!stop_f || !stop_f(dev))) {
+
+		/* Pooling 1 sec on free bio context.*/
 		int ret = wait_event_interruptible_timeout(dev->bio_context_pool_wait,
 				vcablk_is_available(dev->bio_context_pool) || (stop_f && stop_f(dev)),
 				msecs_to_jiffies(TIMEOUT_SEC * 1000));
 		rmb();
-		if (ret <= 0) {
-			WARN_ONCE(!ret, "%s: Still waiting for ring request after more than %i seconds.\n", __func__, TIMEOUT_SEC);
-			continue;
+		if (ret >0) {
+			break;
 		}
-		if (stop_f && stop_f(dev))
-			return NULL;
-		spin_lock(&dev->bio_context_pool_lock);
-		bio_context = vcablk_pool_pop(dev->bio_context_pool, &id);
-		spin_unlock(&dev->bio_context_pool_lock);
+		WARN_ONCE(1, "%s: Wait for ring request TIMEOUT %i second. "
+				"Try pooling again.\n", __func__, TIMEOUT_SEC);
 	}
 
+	if (!vcablk_is_available(dev->bio_context_pool)) {
+		wait_event_interruptible(dev->bio_context_pool_wait,
+				vcablk_is_available(dev->bio_context_pool) || (stop_f && stop_f(dev)));
+	}
+
+	spin_lock(&dev->bio_context_pool_lock);
+	bio_context = vcablk_pool_pop(dev->bio_context_pool, &id);
+	spin_unlock(&dev->bio_context_pool_lock);
 	if (bio_context) {
 		/*Cookie id 0 is invalid*/
 		bio_context->id = id + 1;
@@ -431,7 +435,6 @@ vcablk_disk_async_request(struct vcablk_disk *dev, struct request *req,
 	unsigned long do_sync = false;
 	int ret = 0;
 	__u8 request;
-	__u16 uninitialized_var(prev_bio_cookie);
 	struct vcablk_bio_context *bio_context_previous = NULL;
 	struct vcablk_bio_context *bio_context;
 
@@ -477,7 +480,6 @@ vcablk_disk_async_request(struct vcablk_disk *dev, struct request *req,
 				goto end;
 			}
 			bio_context_previous = bio_context;
-			prev_bio_cookie = READ_ONCE(bio_context->id);
 			bio_context = vcablk_disk_get_bio_context(dev, stop_f);
 			if (!bio_context) {
 				ret = -EIO;
@@ -508,12 +510,8 @@ vcablk_disk_async_request(struct vcablk_disk *dev, struct request *req,
 end:
 	if (ret) {
 		vcablk_disk_request_break(dev, bio_context);
-		/* Before end bio, ensure that last scheduled split part of request finished */
-		if (bio_context_previous && prev_bio_cookie)
-			while (wait_event_interruptible(
-					dev->bio_context_pool_wait,
-					READ_ONCE(bio_context_previous->id) != prev_bio_cookie))
-				/* empty */;
+		/* Before end bio, check that last executed split part of request finished */
+		while (bio_context_previous && bio_context_previous->bvec_ctxs_idx);
 		vcablk_disk_request_end(dev, req, -EIO);
 	}
 	return ret;
@@ -522,10 +520,11 @@ end:
 #undef GBIOVP
 }
 
+
 static int
 vcablk_disk_thread_stop(struct vcablk_disk *dev)
 {
-	int ret = !dev->request_thread_run;
+	int ret = kthread_should_stop();
 	if (ret) {
 		pr_warn("%s: %s Thread should stop\n", dev->gdisk->disk_name, __func__);
 	}
@@ -560,7 +559,6 @@ vcablk_disk_make_request_thread(void *data)
 		vcablk_disk_async_request(dev, req, vcablk_disk_thread_stop);
 	}
 	pr_debug("%s: Thread stop\n", __func__);
-	complete(&dev->request_thread_done);
 	do_exit(0);
 	return 0;
 }
@@ -768,7 +766,6 @@ vcablk_disk_destroy(struct vcablk_disk *dev)
 {
 	struct vcablk_dev* fdev;
 	int err = 0;
-	int ret;
 	int dev_id;
 
 	/* Check that device created */
@@ -785,13 +782,9 @@ vcablk_disk_destroy(struct vcablk_disk *dev)
 
 	pr_debug("%s: destroy device id %i\n", __func__, dev->dev_id);
 
-	if (dev->request_thread_run) {
-		dev->request_thread_run = false;
-		wake_up(&dev->request_event);
-		ret = wait_for_completion_interruptible(&dev->request_thread_done);
-		if (ret < 0) {
-			pr_err("%s: thread request_thread are still running\n", __func__);
-		}
+	if (dev->request_thread) {
+		kthread_stop(dev->request_thread);
+		dev->request_thread = NULL;
 	}
 
 	vcablk_pool_deinit(dev->bio_context_pool);
@@ -873,7 +866,6 @@ vcablk_disk_create(struct vcablk_dev* fdev, int uniq_id, size_t size, bool read_
 	struct vcablk_disk *dev = NULL;
 	unsigned sectors_num;
 	int hardsect_size;
-	struct task_struct *thread;
 
 	if (!ring_req) {
 		pr_err("%s: Disk with ID %i ring_req is NULL\n", __func__, uniq_id);
@@ -1018,20 +1010,17 @@ vcablk_disk_create(struct vcablk_dev* fdev, int uniq_id, size_t size, bool read_
 	dev->gdisk_started = false;
 
 	//MOVED TO START
-	init_completion(&dev->request_thread_done);
-	dev->request_thread_run = false;
-	thread = kthread_create(vcablk_disk_make_request_thread, dev, disk->disk_name);
-	if (IS_ERR(thread)) {
+	dev->request_thread = kthread_create(vcablk_disk_make_request_thread, dev,
+			disk->disk_name);
+	if (IS_ERR(dev->request_thread)) {
 		pr_err("%s: Can not create thread %i\n", __func__,
-				(int)PTR_ERR(thread));
+				(int)PTR_ERR(dev->request_thread));
+		dev->request_thread = NULL;
 		err = -EAGAIN;
 		goto err;
-	} else {
-		dev->request_thread_run = true;
-		wake_up_process(thread);
 	}
 
-
+	wake_up_process(dev->request_thread);
 	return dev;
 err:
 	vcablk_disk_destroy(dev);
@@ -1055,7 +1044,7 @@ vcablk_disk_start(struct vcablk_disk *dev)
 		goto exit;
 	}
 
-	if (!dev->request_thread_run) {
+	if (!dev->request_thread) {
 		pr_err("%s: Bdev id %i thread not created\n", __func__, dev->dev_id);
 			err = -EINVAL;
 			goto err;

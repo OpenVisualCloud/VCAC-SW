@@ -34,7 +34,7 @@
 #endif
 
 static int napi_weight = NAPI_POLL_WEIGHT;
-module_param( napi_weight, int, 0644);
+module_param(napi_weight, int, 0444);
 
 static int num_packets_jumbo = 256;
 module_param(num_packets_jumbo, int, 0444);
@@ -737,16 +737,18 @@ static int virtnet_poll(struct napi_struct *napi, int budget)
 	struct receive_queue *rq =
 		container_of(napi, struct receive_queue, napi);
 	struct virtnet_info *vi = rq->vq->vdev->priv;
-	unsigned int r, received = 0;
+	void *buf;
+	unsigned int r, len, received = 0;
 	bool refill = false;
+
 again:
-	do {
-		unsigned len;
-		void* buf = vca_virtqueue_get_buf(rq->vq, &len);
-		if( !buf ) break;
+	while (received < budget &&
+		   (buf = vca_virtqueue_get_buf(rq->vq, &len)) != NULL) {
 		receive_buf(vi, rq, buf, len);
 		--rq->num;
-	} while( ++received < budget);
+		received++;
+	}
+
 	if (vi->mergeable_rx_bufs || vi->big_packets) {
 		refill = 4 * rq->num < 3 * rq->max;
 	} else {
@@ -755,7 +757,9 @@ again:
 				(4 * (rq->num - rq->max_big - rq->max_jumbo) <
 				3 * (rq->max - rq->max_big - rq->max_jumbo));
 	}
+
 	if (refill) {
+		if (!try_fill_recv(vi, rq, GFP_ATOMIC))
 			schedule_delayed_work(&vi->refill, 0);
 	}
 
@@ -770,6 +774,7 @@ again:
 			goto again;
 		}
 	}
+
 	return received;
 }
 

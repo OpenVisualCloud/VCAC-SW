@@ -145,6 +145,7 @@ dma_cookie_t vcablk_bcknd_dma_async(struct dma_chan *dma_ch, dma_addr_t dst,
 
 		tx = ddev->device_prep_dma_memcpy(dma_ch,  dst, src, len, DMA_PREP_INTERRUPT);
 		if(!tx) {
+			pr_err("Filed to setup dma tx descriptor! No transfer will be submitted\n");
 			cookie = -ENOMEM;
 		} else {
 			tx->callback = callback;
@@ -161,6 +162,8 @@ dma_cookie_t vcablk_bcknd_dma_async(struct dma_chan *dma_ch, dma_addr_t dst,
 				if (out_tx) {
 					*out_tx = NULL;
 				}
+				pr_err("%s: Transmit error: %i\n", __func__, cookie);
+
 			}
 		}
 	}

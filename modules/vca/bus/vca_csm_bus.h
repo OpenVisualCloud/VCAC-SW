@@ -130,7 +130,6 @@ struct vca_csm_hw_ops {
 	enum vca_lbp_retval (*lbp_boot_ramdisk)(struct vca_csm_device *cdev,
 		void __user * img, size_t img_size);
 	enum vca_lbp_retval (*lbp_boot_blkdisk)(struct vca_csm_device *cdev);
-	enum vca_lbp_retval (*lbp_boot_via_pxe)(struct vca_csm_device *cdev);
 	enum vca_lbp_retval (*lbp_boot_from_usb)(struct vca_csm_device *cdev);
 	enum vca_lbp_retval (*lbp_handshake)(struct vca_csm_device *cdev);
 	enum vca_lbp_retval (*lbp_set_param)(struct vca_csm_device *cdev,

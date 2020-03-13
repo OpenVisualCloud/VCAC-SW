@@ -138,6 +138,51 @@ void vop_send_heads_up(struct vop_dev_common *cdev, struct vop_heads_up_irq* irq
 	}
 }
 
+/* macro to generate function waiting for given condition with dedicated heads
+ * up irq */
+#define wait_for_data(name, cond, data_type) \
+	static inline int wait_for_##name(struct vop_dev_common *cdev, \
+				   struct vop_heads_up_irq *irq, data_type data) \
+	{ \
+		struct device *dev = &cdev->vdev->dev; \
+		int ret; \
+		bool dbg = false; \
+		dev_dbg(dev, "%s start waiting for " #name \
+			" heads up? %d\n", __func__,heads_up(irq)); \
+		do { \
+			if (dbg) dev_dbg(dev, "%s try polling\n", __func__);\
+			/* poll for data if heads up irq received */ \
+			while (READ_ONCE(cdev->ready) && \
+						!cond(cdev, data) && heads_up(irq)) \
+				usleep_range(5,10); \
+			 \
+			if (!cond(cdev, data)) { \
+				if (dbg) dev_dbg(dev, "%s heads up expired\n", \
+					__func__); \
+				ret = wait_event_interruptible_timeout( \
+					irq->wq, \
+					!cdev->ready || cond(cdev, data) ||  \
+						heads_up(irq), \
+					msecs_to_jiffies(HEADS_UP_WAIT_TIMEMOUT_MS)); \
+				 \
+				if (ret < 0) \
+					return ret; \
+				else if (ret == 0 && cond(cdev, data)) \
+					dev_warn(dev, \
+						"%s missing heads up irq\n", \
+						__func__); \
+				else if (dbg) dev_dbg(dev, "%s finish waiting " \
+					     "heads_up? %d coniditon? %d\n", __func__, \
+					      heads_up(irq), cond(cdev, data)); \
+			} \
+		} while (!cond(cdev, data) && READ_ONCE(cdev->ready));  \
+		if (!READ_ONCE(cdev->ready)) \
+			return -ENODEV; \
+		else { \
+			if (dbg) dev_dbg(dev, "%s condition is true\n", __func__); \
+			return 0; \
+		} \
+	}
 
 /* returns true if there are some new used descriptors */
 static inline bool check_new_used_desc(struct vop_dev_common *cdev, void *a)
@@ -153,87 +198,8 @@ static inline bool check_new_avail_desc_ring_id(struct vop_dev_common *cdev, int
 	return READ_ONCE(*ring->cnt) != ring->last_cnt;
 }
 
-
-static inline int wait_for_used_desc(struct vop_dev_common *cdev, struct vop_heads_up_irq *irq, void* data)
-{
-    struct device *dev = &cdev->vdev->dev;
-    bool dbg = false;
-    dev_dbg( dev, "%s start waiting for used_desc heads up? %d\n", __func__, heads_up(irq));
-    do {
-        int ret;
-        if (dbg) dev_dbg(dev, "%s try polling\n", __func__);
-        /* poll for data if heads up irq received */
-        while (cdev->ready &&
-               !check_new_used_desc(cdev, data) && heads_up(irq))
-            usleep_range(5,10);
-        if (!check_new_used_desc(cdev, data)) {
-            if (dbg) dev_dbg(dev, "%s heads up expired\n",
-                             __func__);
-            ret = wait_event_interruptible_timeout(
-                        irq->wq,
-                        !cdev->ready || check_new_used_desc(cdev, data) ||
-                        heads_up(irq),
-                        msecs_to_jiffies(HEADS_UP_WAIT_TIMEMOUT_MS));
-            if (ret < 0)
-                return ret;
-            else if (ret == 0 && check_new_used_desc(cdev, data))
-                dev_warn(dev,
-                         "%s missing heads up irq\n",
-                         __func__);
-            else if (dbg) dev_dbg(dev, "%s finish waiting "
-                                       "heads_up? %d coniditon? %d\n", __func__,
-                                  heads_up(irq), check_new_used_desc(cdev, data));
-            vop_send_heads_up(cdev,irq); // VCASS-3044
-        }
-    } while (!check_new_used_desc(cdev, data) && cdev->ready);
-    if (!cdev->ready)
-        return -ENODEV;
-    else {
-        if (dbg) dev_dbg(dev, "%s condition is true\n", __func__);
-        return 0;
-    }
-}
-
-
-static inline int wait_for_avail_desc_ring_id(struct vop_dev_common *cdev, struct vop_heads_up_irq *irq, int data)
-{
-    struct device *dev = &cdev->vdev->dev;
-    bool dbg = false;
-    dev_dbg(dev, "%s start waiting for avail_desc_ring_id heads up? %d\n", __func__, heads_up(irq));
-    do {
-        int ret;
-        if (dbg) dev_dbg(dev, "%s try polling\n", __func__);
-        /* poll for data if heads up irq received */
-        while (cdev->ready &&
-               !check_new_avail_desc_ring_id(cdev, data) && heads_up(irq))
-            usleep_range(5,10);
-        if (!check_new_avail_desc_ring_id(cdev, data)) {
-            if (dbg) dev_dbg(dev, "%s heads up expired\n",
-                             __func__);
-            ret = wait_event_interruptible_timeout(
-                        irq->wq,
-                        !cdev->ready || check_new_avail_desc_ring_id(cdev, data) ||
-                        heads_up(irq),
-                        msecs_to_jiffies(HEADS_UP_WAIT_TIMEMOUT_MS));
-            if (ret < 0)
-                return ret;
-            else if (ret == 0 && check_new_avail_desc_ring_id(cdev, data))
-                dev_warn(dev,
-                         "%s missing heads up irq\n",
-                         __func__);
-            else if (dbg) dev_dbg(dev, "%s finish waiting "
-                                       "heads_up? %d coniditon? %d\n", __func__,
-                                  heads_up(irq), check_new_avail_desc_ring_id(cdev, data));
-        }
-    } while (!check_new_avail_desc_ring_id(cdev, data) && cdev->ready);
-    if (!cdev->ready)
-        return -ENODEV;
-    else {
-        if (dbg) dev_dbg(dev, "%s condition is true\n", __func__);
-        return 0;
-    }
-}
-
+wait_for_data(used_desc, check_new_used_desc, void*)
+wait_for_data(avail_desc_ring_id, check_new_avail_desc_ring_id, int)
 
 int vop_wait_for_avail_desc(struct vop_dev_common *cdev,
 		struct vop_heads_up_irq *avail_hu_irq, int ring_id)
@@ -610,17 +576,19 @@ void vop_kvec_buf_consume(struct vop_dev_common *cdev)
 {
 	struct vop_used_kiov_ring *used_ring = &cdev->kvec_buff.local_write_kvecs.used_ring;
 	struct vop_peer_used_kiov *kiov;
-	unsigned long flags;
 
+	/* We're about to acquire spin lock potentially hold by vop_kvec_buf_update() in softirq
+	   context. Disabling interrupts to avoid preemption while holding the spin lock */
+	local_irq_disable();
 	while(READ_ONCE(cdev->ready) &&
 	      READ_ONCE(*used_ring->cnt) != used_ring->last_cnt) {
 		kiov = used_ring->buf + KVEC_COUNTER_TO_IDX(used_ring->last_cnt, used_ring->num);
-		/* vr_spinlock is used also by vop_kvec_buf_update() in softirq context*/
-		spin_lock_irqsave(&cdev->vringh_rcv->vr_spinlock, flags);
+		spin_lock(&cdev->vringh_rcv->vr_spinlock);
 		vca_vringh_complete_kern(&cdev->vringh_rcv->vrh, kiov->head, kiov->len);
-		spin_unlock_irqrestore(&cdev->vringh_rcv->vr_spinlock, flags);
+		spin_unlock(&cdev->vringh_rcv->vr_spinlock);
 		used_ring->last_cnt = KVEC_COUNTER_ADD(used_ring->last_cnt, 1, used_ring->num);
 	}
+	local_irq_enable();
 }
 
 int vop_spin_for_used_descriptors(struct vop_dev_common *cdev)

@@ -63,9 +63,10 @@ typedef struct {
 		if (get_pool_head_idx(pool, itr)->next_free == VCABLK_POOL_USED && \
 		    (ptr = get_pool_head_idx(pool, itr)->data))
 
-static inline void vcablk_pool_init_links(vcablk_pool_t *pool)
+inline void vcablk_pool_clear(vcablk_pool_t *pool)
 {
 	__u16 i;
+	memset (pool->alloc, 0, pool->alloc_size * pool->num);
 	pool->head = 0;
 	for (i = 0; i < pool->num - 1; ++i) {
 		get_pool_head_idx(pool, i)->next_free = i + 1;
@@ -88,17 +89,19 @@ inline vcablk_pool_t *vcablk_pool_init(__u16 num, size_t size)
 	/* Add one element because one of elements in pool is always blocked */
 	++num;
 
-	pool = kzalloc(sizeof(vcablk_pool_t) + alloc_size * num, GFP_KERNEL);
+	pool = kmalloc(sizeof(vcablk_pool_t) + alloc_size * num, GFP_KERNEL);
 	if (!pool)
 		return NULL;
+	memset (pool, 0, sizeof(vcablk_pool_t));
 	pool->num = num;
 	pool->alloc_size = alloc_size;
-	vcablk_pool_init_links(pool);
+	vcablk_pool_clear(pool);
 	return pool;
 }
 
 inline void vcablk_pool_deinit(vcablk_pool_t *pool)
 {
+	if (pool)
 		kfree(pool);
 }
 

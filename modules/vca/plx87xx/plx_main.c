@@ -36,8 +36,6 @@
 #include "plx_alm.h"
 #include "plx_hw_ops_blockio.h"
 #include "../blockio/hal_pci/vcablk_hal_pci.h"
-#include "plx_hw_ops_pxe.h"
-#include "../pxe/vcapxe_register.h"
 #include "plx_procfs.h"
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)
@@ -432,8 +430,6 @@ static int plx_register_device(struct plx_device *xdev)
 
 		if ((rc =  _validate_ptr(xdev, (void**)&xdev->blockio.be_dev, "blockio backend")))
 			goto err;
-
-		xdev->pxe_dev = vcapxe_register(xdev, &xdev->pdev->dev, &pxe_hw_ops, xdev->card_id, plx_identify_cpu_id(xdev->pdev));
 
 		switch(xdev->card_type) {
 			case VCA_VCGA_FAB1:

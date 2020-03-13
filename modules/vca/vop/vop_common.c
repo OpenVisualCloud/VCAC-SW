@@ -46,21 +46,6 @@
 #include "../plx87xx/plx_device.h"
 #include "../plx87xx/plx_hw.h"
 
-/* exclude first argument */
-#define FIRST_ARG(first, ...) first
-
-#define dev_err_once_dbg_later(...) \
-	do { \
-	static bool err_print = true; \
-	if (err_print) { \
-		err_print = false; \
-		dev_err(__VA_ARGS__); \
-		dev_err( FIRST_ARG(__VA_ARGS__), "[%s:%d Next occurrences will be logged at debug level]\n", __func__, __LINE__); \
-	}  else { \
-		dev_dbg(__VA_ARGS__); \
-	} } while (0)
-
-
 #define VOP_RING_SIZE_MASK (VOP_RING_SIZE - 1)
 
 #define TIMEOUT_SEND_MS 3000
@@ -297,8 +282,7 @@ dma_cookie_t vop_async_dma(struct vop_device *vpdev, dma_addr_t dst,
 	}
 error:
 	if (dma_submit_error(cookie)) {
-		dev_err_once_dbg_later(&vi->vpdev->dev, "%s %d err %d\n",
-				__func__, __LINE__, cookie);
+		dev_err(&vi->vpdev->dev, "%s %d err %d\n", __func__, __LINE__, cookie);
 	}
 
 	return cookie;
@@ -347,7 +331,7 @@ int vop_sync_dma(struct vop_device *vpdev, dma_addr_t dst,
 	}
 error:
 	if (err)
-		dev_err_once_dbg_later(&vi->vpdev->dev, "%s %d err %d\n",
+		dev_err(&vi->vpdev->dev, "%s %d err %d\n",
 			__func__, __LINE__, err);
 	return err;
 }
@@ -881,7 +865,7 @@ transfer_dma_send(struct buffer_dma_item *item, struct vop_device *vdev,
 	if (dma_submit_error(cookie)) {
 		item->jiffies = 0;
 		err = cookie;
-		dev_err_once_dbg_later(&vdev->dev, "dma error %d\n", err);
+		dev_err(&vdev->dev, "dma error %d\n", err);
 	}
 
 	return err;
@@ -964,19 +948,8 @@ transfer_write(struct buffer_dma_item *item, struct vop_device *vdev)
 						/* Destination dma address */
 						(u64)vdev->aper->pa + (item->remapped - vdev->aper->va),
 						item->data_size);
-				if (err) {
-					/* MEMCPY path RECOVERY*/
-					/* For issues in DMA driver module switch on memcpy mode.
-					 * To reduce dmesg messages, there will be only one
-					 * notification about run this path.*/
-					dev_err_once_dbg_later(&vdev->dev,
-									"%s Transfer DMA error %i, Transfer memcpy, size %lu\n",
-									__func__, err, item->data_size);
-					transfer_memcpy_send(item, vdev, item->data_size);
-					transfer_done(item);
-					item->ring->counter_done_transfer++;
-					err = 0;
-				}
+				if (err)
+					break;
 			} else {
 				/* MEMCPY path */
 				transfer_memcpy_send(item, vdev, item->data_size);
@@ -1031,24 +1004,6 @@ void transfer_done_callback(void *data)
 	struct vop_dev_common *cdev = ring->cdev;
 	u16 ind_dma_next = (ring->counter_done_transfer) & VOP_RING_SIZE_MASK;
 	u16 ind_dma_end = (item->id + 1) & VOP_RING_SIZE_MASK;
-
-	struct vop_device *vdev = ring->vdev;
-	struct vop_info *vi = vdev->priv;
-	struct dma_chan *vop_ch = vi->dma_ch;
-
-	enum dma_status status  = dma_async_is_tx_complete(vop_ch,
-			item->tx->cookie , NULL, NULL);
-
-	if (status == DMA_ERROR) {
-		/* MEMCPY path RECOVERY*/
-		dev_warn(&vdev->dev,
-						"%s  Failed DMA transfer error %i, "
-						"Attempting again by using memcpy, size %lu\n",
-						__func__, status, item->data_size);
-		transfer_memcpy_send(item, vdev, item->data_size);
-	}
-
-
 	item->tx = NULL;
 
 	BUILD_BUG_ON(VOP_RING_SIZE >

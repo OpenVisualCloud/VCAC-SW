@@ -61,8 +61,6 @@ vca/plx87xx/plx_lbp.c
 vca/plx87xx/plx_lbp.h
 vca/plx87xx/plx_hw_ops_blockio.c
 vca/plx87xx/plx_hw_ops_blockio.h
-vca/plx87xx/plx_hw_ops_pxe.c
-vca/plx87xx/plx_hw_ops_pxe.h
 vca/plx87xx/plx_hw_ops_vca_mgr.c
 vca/plx87xx/plx_hw_ops_vca_mgr_extd.c
 vca/plx87xx/plx_hw_ops_vca_csa.c
@@ -108,13 +106,6 @@ vca/vca_virtio/include/vca_virtio_config.h
 vca/vca_virtio/include/vca_virtio_byteorder.h
 vca/vca_virtio/include/vca_virtio.h
 vca/vca_virtio/Kbuild
-vca/pxe/vcapxe_ioctl.h
-vca/pxe/vcapxe_netdev.h
-vca/pxe/vcapxe_netdev.c
-vca/pxe/vcapxe_register.h
-vca/pxe/vcapxe.h
-vca/pxe/vcapxe_main.c
-vca/pxe/Kbuild
 vca/vop/vop_debugfs.c
 vca/vop/Kbuild
 vca/vop/vop_common.c

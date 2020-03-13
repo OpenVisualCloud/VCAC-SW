@@ -128,11 +128,8 @@ static long vca_cpu_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 		rc = vca_agent_command_ioctl(cdev, argp);
 		break;
 	}
-	case LBP_BOOT_VIA_PXE:
 	case LBP_BOOT_BLKDISK: {
-		enum vca_lbp_retval ret;
-		if (cmd == LBP_BOOT_VIA_PXE) ret = cdev->hw_ops->lbp_boot_via_pxe(cdev);
-		else ret = cdev->hw_ops->lbp_boot_blkdisk(cdev);
+		enum vca_lbp_retval ret = cdev->hw_ops->lbp_boot_blkdisk(cdev);
 		if (copy_to_user(argp, &ret, sizeof(ret))) {
 					rc = -EFAULT;
 				}

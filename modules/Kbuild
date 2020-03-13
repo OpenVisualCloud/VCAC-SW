@@ -83,7 +83,6 @@ obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/vca_csa/
 obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/vca_virtio/
 obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/vop/
 obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/blockio/
-obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/pxe/
 obj-$(m-not-$(CONFIG_X86_VCAPCI)) += plx87xx.o
 obj-$(m-not-$(CONFIG_X86_VCAPCI)) += vca/plx87xx_dma/
 
@@ -97,7 +96,6 @@ plx87xx-objs += vca/plx87xx/plx_intr.o
 plx87xx-objs += vca/plx87xx/plx_alm.o
 plx87xx-objs += vca/plx87xx/plx_lbp.o
 plx87xx-objs += vca/plx87xx/plx_hw_ops_blockio.o
-plx87xx-objs += vca/plx87xx/plx_hw_ops_pxe.o
 plx87xx-objs += vca/plx87xx/plx_hw_ops_vca_mgr.o
 plx87xx-objs += vca/plx87xx/plx_hw_ops_vca_mgr_extd.o
 plx87xx-objs += vca/plx87xx/plx_hw_ops_vca_csa.o

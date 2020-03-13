@@ -134,30 +134,12 @@ extern struct dentry *plx_dma_dbg;
 #define WRITE_ONCE(x, val) ( ACCESS_ONCE(x) = (val) )
 #endif
 
-/* Flag inform about dma hang */
-#define DMA_MODE_HANG				(1U<<0)
-/* Flag to return error when try start dma transfer */
-#define DMA_MODE_FORCE_FAIL			(1U<<1)
-/* Flag to return error when check dma transfer result */
-#define DMA_MODE_FAULT_INJECTION	(1U<<2)
-/* Flag to return error transfers during abort */
-#define DMA_MODE_ABORT				(1U<<3)
-
 /* HW dma desc */
 struct plx_dma_desc {
 	u32 dw0;
 	u32 dw1;
 	u32 dw2;
 	u32 dw3;
-};
-
-struct plx_dma_watchdog {
-	volatile bool watchdog_thread_run;
-	struct completion watchdog_thread_done;
-	wait_queue_head_t watchdog_event;
-	u32 callback_wait_repeat;
-	unsigned long callback_wait_ms;
-	u8 watchdog_enable;
 };
 
 /*
@@ -174,7 +156,7 @@ struct plx_dma_watchdog {
  * @tx_array: array of async_tx
  * @cleanup_lock: lock held when processing completed tx
  * @prep_lock: lock held in prep_memcpy & released in tx_submit
- * @dma_hang_mode: detected dma hang error, set fail force mode, fault injection.
+ * @dma_hang: detected dma hang error
  * @cleanup: cleanup function to move the SW tail upto HW the tail
  */
 struct plx_dma_chan {
@@ -189,11 +171,12 @@ struct plx_dma_chan {
 	struct dma_async_tx_descriptor *tx_array;
 	spinlock_t cleanup_lock;
 	spinlock_t prep_lock;
+	bool dma_hang;
 	bool dbg_flush;
 	u32 dbg_dma_hold_cnt;
-	u32 dma_hang_mode;
-	struct plx_dma_watchdog watchdog;
+
 	void (*cleanup)(struct plx_dma_chan *ch);
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 0, 0)
 	dma_cookie_t completed_cookie;
 #endif
@@ -216,7 +199,6 @@ struct plx_dma_device {
 	struct plx_dma_chan plx_chan;
 	size_t max_xfer_size;
 	struct dentry *dbg_dir;
-	atomic_t intx; // PLX_DMA_INTR_CTRL_STATUS from plx_dma_intr_handler
 };
 
 static inline struct plx_dma_device *to_plx_dma_dev(struct plx_dma_chan *ch)
@@ -238,17 +220,7 @@ static inline struct device *plx_dma_ch_to_device(struct plx_dma_chan *ch)
 
 static inline bool plx_get_dma_hang(struct plx_dma_chan *ch)
 {
-	return ch->dma_hang_mode & DMA_MODE_HANG;
-}
-
-static inline bool plx_get_dma_mode_force_fail(struct plx_dma_chan *ch)
-{
-	return ch->dma_hang_mode & DMA_MODE_FORCE_FAIL;
-}
-
-static inline bool plx_get_dma_fault_injection(struct plx_dma_chan *ch)
-{
-	return ch->dma_hang_mode & DMA_MODE_FAULT_INJECTION;
+	return ch->dma_hang;
 }
 
 static inline int plx_dma_ring_count(u32 head, u32 tail)
@@ -271,8 +243,6 @@ u32 plx_dma_ch_reg_read(struct plx_dma_chan *ch, u32 offset);
 u32 plx_get_hw_last_desc(struct plx_dma_chan *ch);
 u32 plx_get_hw_next_desc(struct plx_dma_chan *ch);
 void plx_debugfs_init(struct plx_dma_device *plx_dma_dev);
-void plx_set_abort(struct plx_dma_chan *ch);
-void plx_set_dma_mode(struct plx_dma_chan *ch, u32 mask, u32 value);
 
 #ifdef PLX_DMA_DEBUG
 struct plx_debug {

@@ -292,19 +292,6 @@ static enum vca_lbp_retval _plx_lbp_boot_blkdisk(struct vca_csm_device *cdev)
 	return plx_lbp_boot_blkdisk(xdev);
 }
 
-static enum vca_lbp_retval _plx_lbp_boot_via_pxe(struct vca_csm_device *cdev)
-{
-	struct plx_device *xdev = vca_csmdev_to_xdev(cdev);
-	enum vca_lbp_retval ret;
-
-	ret = set_mac_addr(xdev);
-	if (ret != LBP_STATE_OK) {
-		return ret;
-	}
-
-	return plx_lbp_boot_via_pxe(xdev);
-}
-
 static enum vca_lbp_retval _plx_lbp_boot_from_usb(struct vca_csm_device *cdev)
 {
 	struct plx_device *xdev = vca_csmdev_to_xdev(cdev);
@@ -563,7 +550,6 @@ struct vca_csm_hw_ops vca_csm_plx_hw_ops = {
 	.get_meminfo = _plx_get_meminfo,
 	.lbp_boot_ramdisk = _plx_lbp_boot_ramdisk,
 	.lbp_boot_blkdisk = _plx_lbp_boot_blkdisk,
-	.lbp_boot_via_pxe = _plx_lbp_boot_via_pxe,
 	.lbp_boot_from_usb = _plx_lbp_boot_from_usb,
 	.lbp_handshake = _plx_lbp_handshake,
 	.lbp_set_param = _plx_lbp_set_param,
