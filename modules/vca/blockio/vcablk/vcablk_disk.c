@@ -103,14 +103,10 @@ struct vcablk_disk {
 	struct hd_geometry geo;             /* Geometry of disk */
 	spinlock_t lock;                    /* For mutual exclusion */
 	short ref_cnt;                      /* How many users */
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) || LINUX_VERSION_CODE == KERNEL_VERSION(4,18,0) // the blk_status_t actually appeared in 4.13.x
 	struct request_queue *queue;        /* The device request queue */
 	struct gendisk *gdisk;              /* The gendisk structure */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) || LINUX_VERSION_CODE == KERNEL_VERSION(4,18,0) // the blk_status_t actually appeared in 4.13.x
 	struct blk_mq_tag_set tag_set;
-#else
-	struct request_queue *queue;    /* The device request queue */
-	struct gendisk *gdisk;             /* The gendisk structure */
 #endif
 	bool gdisk_started;
 	bool read_only;
@@ -166,7 +162,6 @@ vcablk_disk_request_clean(struct vcablk_disk *dev,
 {
 	struct vcablk_dev* fdev = dev->fdev;
 	unsigned int i;
-
 	for (i = 0; i <bio_context->bvec_ctxs_idx; ++i) {
 		struct bvec_context *map = bio_context->bvec_ctxs + i;
 				vcablk_dma_unmap_page(fdev->parent,
@@ -193,6 +188,8 @@ vcablk_disk_request_end(struct vcablk_disk *dev, struct request *req, int ret)
 #else
 	__blk_end_request_all(req, ret);
 #endif
+	if( ret )
+		pr_err("%s: Block I/O queue error %d\n", __func__, ret);
 	spin_unlock_irq(&dev->lock);
 }
 
@@ -467,7 +464,6 @@ vcablk_disk_async_request(struct vcablk_disk *dev, struct request *req,
 			goto end;
 		}
 	}
-
 	/* Do each segment independently. */
 	rq_for_each_segment(bvec, req, iter) {
 		unsigned long sectors_num = GBIOVP(bvec)->bv_len >> SECTOR_SHIFT;
@@ -494,7 +490,6 @@ vcablk_disk_async_request(struct vcablk_disk *dev, struct request *req,
 			goto end;
 		GBIOSEC(req->bio) += sectors_num;
 	}
-
 	if (do_sync) {
 		ret = vcablk_disk_request_step(dev, NULL, bio_context, REQUEST_SYNC, 0, 0, stop_f);
 		if (ret) {
@@ -510,8 +505,14 @@ vcablk_disk_async_request(struct vcablk_disk *dev, struct request *req,
 end:
 	if (ret) {
 		vcablk_disk_request_break(dev, bio_context);
-		/* Before end bio, check that last executed split part of request finished */
-		while (bio_context_previous && bio_context_previous->bvec_ctxs_idx);
+		/* Before end bio, check that last executed split part of request finished
+		   bio_context_previous->bvec_ctxs_idx is expected to be zeroed on IRQ by call chain: 
+		   vcablk_disk_request_completion_handler()
+		     ->vcablk_disk_request_done()
+			   ->vcablk_disk_request_clean()
+		*/
+		while (bio_context_previous && bio_context_previous->bvec_ctxs_idx)
+			// empty;
 		vcablk_disk_request_end(dev, req, -EIO);
 	}
 	return ret;
@@ -556,6 +557,10 @@ vcablk_disk_make_request_thread(void *data)
 		spin_unlock_irq(&dev->req_ring_lock);
 
 		BUG_ON(!req);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) || LINUX_VERSION_CODE == KERNEL_VERSION(4,18,0) // the blk_status_t actually appeared in 4.13.x
+		blk_mq_start_request(req);
+		// blk_mq_end_request(req, <blk_status_t>) will run after getting confirmation by vcablk_disk_request_end() from completing the task on the other side of PCI
+#endif
 		vcablk_disk_async_request(dev, req, vcablk_disk_thread_stop);
 	}
 	pr_debug("%s: Thread stop\n", __func__);
@@ -566,25 +571,21 @@ vcablk_disk_make_request_thread(void *data)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,1,16) || LINUX_VERSION_CODE == KERNEL_VERSION(4,18,0) // the blk_status_t actually appeared in 4.13.x
 	static blk_status_t vcablk_disk_request_fn(struct blk_mq_hw_ctx *hctx, const struct blk_mq_queue_data* bd)
 	{
-		struct request *rq = bd->rq;
-		struct vcablk_disk *dev = rq->q->queuedata;
-
+		struct request *req = bd->rq;
+		struct vcablk_disk *dev = req->q->queuedata;
 		spin_lock_irq(&dev->req_ring_lock);
 		rmb();
 		{
 			int new_head;
 			blk_status_t status = BLK_STS_OK;
-			blk_mq_start_request(rq);
-
 			new_head = (dev->req_ring.head +1 )&REQ_RING_MASK;
 			if (new_head == dev->req_ring.tail) {
 				pr_err("%s: Ring request is too small!!! Ignore request.\n", __func__);
 				status = BLK_STS_IOERR;
 			} else {
-				dev->req_ring.ring[dev->req_ring.head] = rq;
+				dev->req_ring.ring[dev->req_ring.head] = req;
 				dev->req_ring.head = new_head;
 			}
-			blk_mq_end_request(rq, status);
 		}
 		wmb();
 		spin_unlock_irq(&dev->req_ring_lock);
@@ -594,27 +595,26 @@ vcablk_disk_make_request_thread(void *data)
 #else
 	static void vcablk_disk_request_fn(struct request_queue *q)
 	{
-		   struct vcablk_disk *dev = q->queuedata;
-		   struct request *req;
-		   int new_head;
-			spin_lock_irq(&dev->req_ring_lock);
-		  rmb();
-		   while ((req = blk_peek_request(q)) != NULL) {
-				   blk_start_request(req);
-				   new_head = (dev->req_ring.head +1 )&REQ_RING_MASK;
-				   if (new_head == dev->req_ring.tail) {
-						   /* Ring is too small. Ignore request. */
-						   pr_err("%s: Ring request is too small!!! Ignore request.\n", __func__);
-						   __blk_end_request_all(req, -EIO);
-						   break;
-				   }
-				   dev->req_ring.ring[dev->req_ring.head] = req;
-				   dev->req_ring.head = new_head;
+		struct request *req;
+		struct vcablk_disk *dev = q->queuedata;
 
-		   }
-		   wmb();
-		   spin_unlock_irq(&dev->req_ring_lock);
-		   wake_up(&dev->request_event);
+		int new_head;
+		spin_lock_irq(&dev->req_ring_lock);
+		rmb();
+		while ((req = blk_peek_request(q)) != NULL) {
+			blk_start_request(req);
+			new_head = (dev->req_ring.head +1 )&REQ_RING_MASK;
+			if (new_head == dev->req_ring.tail) {
+				pr_err("%s: Ring request is too small!!! Ignore request.\n", __func__);
+				__blk_end_request_all(req, -EIO);
+				break;
+			}
+			dev->req_ring.ring[dev->req_ring.head] = req;
+			dev->req_ring.head = new_head;
+		}
+		wmb();
+		spin_unlock_irq(&dev->req_ring_lock);
+		wake_up(&dev->request_event);
 	}
 #endif
 static void

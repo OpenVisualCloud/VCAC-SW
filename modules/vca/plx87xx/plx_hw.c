@@ -1278,6 +1278,7 @@ void plx_init_vca_g2_gpios(struct plx_device *xdev)
 	case VCA_VCGA_FAB1:
 		if( data.Vcga.CpuReset0 || data.Vcga.CpuReset1)
 			break;
+		/* fall through */
 	case VCA_UNKNOWN: case VCA_VV: case VCA_PRODUCTION: // These values should be removed from vca_card_type
 	case VCA_VV_FAB1: case VCA_VV_FAB2: case VCA_FPGA_FAB1:
 		data.all= 0x7ff;

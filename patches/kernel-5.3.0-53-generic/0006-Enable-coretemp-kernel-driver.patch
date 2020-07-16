@@ -1,0 +1,28 @@
+From b123d3b9586856edb2e68c2234e8a924f5b3c82b Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Fri, 10 Jul 2020 11:09:53 +0200
+Subject: [PATCH 6/6] Enable coretemp kernel driver
+
+Required for Linux command 'sensors coretemp-isa-0000' (from lm-sensors package)
+Required for 'vcactl temp'
+Set 'CONFIG_SENSORS_CORETEMP=y' in .config
+---
+ .config | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.config b/.config
+index 0068c72cf919..6f25b1ec2081 100644
+--- a/.config
++++ b/.config
+@@ -2523,7 +2523,7 @@ CONFIG_HWMON=y
+ # CONFIG_SENSORS_G762 is not set
+ # CONFIG_SENSORS_HIH6130 is not set
+ # CONFIG_SENSORS_I5500 is not set
+-# CONFIG_SENSORS_CORETEMP is not set
++CONFIG_SENSORS_CORETEMP=y
+ # CONFIG_SENSORS_IT87 is not set
+ # CONFIG_SENSORS_JC42 is not set
+ # CONFIG_SENSORS_POWR1220 is not set
+-- 
+2.17.1
+

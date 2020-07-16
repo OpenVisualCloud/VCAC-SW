@@ -1,1 +1,3 @@
-SUBSYSTEM=="net", ACTION=="add", ATTR{address}=="fe:00:00:00:0?:0?", KERNEL=="eth*", RUN+="/usr/sbin/vca_eth_ifup.sh '%E{DEVPATH}'"
+SUBSYSTEM=="net", SUBSYSTEMS=="vca_virtio", ACTION=="add", ATTR{address}=="fe:00:00:00:0?:0?", KERNEL=="eth*",\
+	ENV{NM_UNMANAGED}="1",\
+	RUN+="/usr/sbin/vca_eth_ifup.sh '%E{DEVPATH}'"

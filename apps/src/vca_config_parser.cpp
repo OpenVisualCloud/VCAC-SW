@@ -206,11 +206,12 @@ bool vca_config::save_vca_xml(boost::property_tree::ptree &pt)
 	}
 
 	auto grp = getgrnam("vcausers");
-	if (FAIL == rename(filename_tmp.c_str(), filename.c_str()) ||
+	if (!grp ||
+	    FAIL == rename(filename_tmp.c_str(), filename.c_str()) ||
 	    FAIL == chown(filename.c_str(), (uid_t)-1, grp->gr_gid ) ||
 	    FAIL == chmod(filename.c_str(), S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP) ) {
-		LOG_ERROR("Cannot rename files or change their ownership/permissions - old: %s, new: %s: %s\n",
-			filename_tmp.c_str(), filename.c_str(), strerror(errno));
+		LOG_ERROR("Cannot rename files or change their ownership/permissions - old: %s, new: %s, new group name: %s (group id:%u): %s\n",
+			filename_tmp.c_str(), filename.c_str(), grp?grp->gr_name:"UNKNOWN", grp?grp->gr_gid:-1, strerror(errno));
 		LOG_WARN("VCA configuration file has not been changed since the last operation.\n");
 		return false;
 	}

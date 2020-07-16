@@ -165,7 +165,7 @@ assemble_archive (){
 	local _VIRTUAL_ARCHIVE_DIR="$1"
 	local _ARCHIVE_FILE="$2"
 
-	touch "${_ARCHIVE_FILE}"	# to add files/dirs later with 'tar rf'
+	:> "${_ARCHIVE_FILE}"	# truncate or create; add files/dirs later with 'tar rf'
 	if [ -d "${_VIRTUAL_ARCHIVE_DIR}/${_CONST_PKG_DIR}" ] ; then
 		# add the *._CONST_PKG_EXT files to the final archive:
 		tar rf "${_ARCHIVE_FILE}" -C "${_VIRTUAL_ARCHIVE_DIR}" "${_CONST_PKG_DIR}" --exclude=lock --exclude=partial

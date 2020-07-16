@@ -1041,6 +1041,7 @@ enum vca_lbp_retval plx_lbp_set_param(struct plx_device *xdev,
 			break;
 		case VCA_LBP_PARAM_i7_CMD_TIMEOUT_MS:
 			xdev->lbp.parameters.i7_cmd_timeout_ms = val;
+			/* fall through */
 		case VCA_LBP_PARAM_i7_MAC_WRITE_TIMEOUT_MS:
 			xdev->lbp.parameters.i7_mac_write_timeout_ms = val;
 		default:

@@ -1,0 +1,33 @@
+From 2d343377cca9271c5a1f0ba5a88b693fa1c2459e Mon Sep 17 00:00:00 2001
+From: Marcin Rysztowski <marcin.rysztowski@intel.com>
+Date: Tue, 24 Mar 2015 10:43:32 +0100
+Subject: [PATCH 1/6] Add compilation and linker flags required by SDL
+
+---
+ Makefile | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 7a4042e99bcc..38442c8b8ac4 100644
+--- a/Makefile
++++ b/Makefile
+@@ -450,12 +450,12 @@ CHECKFLAGS     := -D__linux__ -Dlinux -D__STDC__ -Dunix -D__unix__ \
+ 		  -Wbitwise -Wno-return-void -Wno-unknown-attribute $(CF)
+ KMSG_CHECK	= $(srctree)/scripts/kmsg-doc
+ NOSTDINC_FLAGS :=
+-CFLAGS_MODULE   =
++CFLAGS_MODULE   = -fstack-protector -O2 -D_FORTIFY_SOURCE=2 -Wformat
+ AFLAGS_MODULE   =
+-LDFLAGS_MODULE  =
+-CFLAGS_KERNEL	=
++LDFLAGS_MODULE  = -z noexecstack -z relro -z now
++CFLAGS_KERNEL	= -D_FORTIFY_SOURCE=2 -Wformat
+ AFLAGS_KERNEL	=
+-LDFLAGS_vmlinux =
++LDFLAGS_vmlinux	= -z noexecstack -z relro -z now
+ 
+ # Prefer linux-backports-modules
+ ifneq ($(KBUILD_SRC),)
+-- 
+2.17.1
+

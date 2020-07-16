@@ -44,6 +44,9 @@ Single dot (.) in beginning of paths (ie: ./master_build.sh) refers to
 #### Downloading third party sources
 Some third party sources must be present before actual build, to download them
 look for URLs in top-level download_dependencies.sh file.
+E.g. sources for Ubuntu Linux kernel 5.3.0 can be found in two parts:
+	https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/linux/5.3.0-53.47/linux_5.3.0.orig.tar.gz
+	https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/linux/5.3.0-53.47/linux_5.3.0-53.47.diff.gz
 After manual inspection and eventual URL customization, invoke script:
 ./download_dependencies.sh \<path-to-store-downloads\>
 usual proxy settings will be taken into account (similarly for docker).

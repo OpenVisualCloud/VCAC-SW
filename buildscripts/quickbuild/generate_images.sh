@@ -569,6 +569,20 @@ generate_images(){
 			gen_centos VLTL BRM
 			#gen_centos PRST BRM BLK 24
 		;;
+		5.3.*)
+			case "${FEATURE}" in
+				MSS)
+					echo -e "no MSS images selected\n"
+				;;
+				STD)
+					gen_ubuntu VLTL BRM
+					gen_ubuntu PRST BRM BLK
+				;;
+				*)
+					die "Unsupported FEATURE=${FEATURE}"
+				;;
+			esac
+		;;
 		*)
 			die "Unsupported KER_VER=${KER_VER}"
 		;;

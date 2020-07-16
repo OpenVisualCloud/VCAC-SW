@@ -123,8 +123,8 @@ static void ack_interrupt(struct device *dev, int db)
 static void vcablk_bcknd_create_test_ram_disk(struct vcablk_bcknd_dev* bdev)
 {
 	int ret;
-	int diskid = 20;
-	/* Setup first RAM devices */
+	int diskid = 7;
+	/* Setup test RAM devices */
 	if (!bdev->device_array[diskid]) {
 		struct vcablk_disk_open_desc *desc = vmalloc(sizeof (struct vcablk_disk_open_desc));
 		if (!desc) {

@@ -1748,7 +1748,7 @@ const char * try_get_path(const caller_data & d, const data_field & data)
 			if(file_exists(default_path))
 				return default_path;
 			else {
-				d.LOG_CPU_ERROR("%s file %s does not exist!\n", data.get_name(),
+				d.LOG_CPU_ERROR("%s Can't access file %s!\n", data.get_name(),
 						default_path);
 				return NULL;
 			}
@@ -2031,7 +2031,7 @@ bool get_blk_config_field(caller_data d, unsigned int blk_dev_id, struct vca_blk
 	}
 	else if (mode == BLOCKIO_MODE_RO || mode == BLOCKIO_MODE_RW) {
 		if (!file_exists(blk_dev_info.path.c_str())) {
-			d.LOG_CPU_ERROR("File (%s) used from config to create block device %s not exist!\n",
+			d.LOG_CPU_ERROR("File (%s) used from config to create block device %s cant' be accessed!\n",
 				blk_dev_info.path.c_str(), get_block_dev_name_from_id(blk_dev_id).c_str());
 			return false;
 		}
@@ -2084,14 +2084,6 @@ bool open_enabled_blk_devs(caller_data d)
 	return true;
 }
 
-bool is_network_manager_running()
-{
-	char buf[4] = "";
-	// wc used to suppress nonzero exit code from pgrep
-	run_cmd_with_output("pgrep NetworkManager | wc -l", buf, sizeof(buf));
-	return buf[0] != '0';
-}
-
 static bool is_mv_bios_version_2_0(std::string current_bios_version, std::string bios_version_2_0)
 {
 	// based on BIOS versioning model since beginning of this project we are sure that comparing strings is enough
@@ -2136,13 +2128,6 @@ bool boot(caller_data d)
 
 	if (!validate_node_range(d)) {
 		d.LOG_CPU_ERROR("Invalid caller data\n");
-		return false;
-	}
-
-	if (!d.args.is_force_cmd_enabled() && is_network_manager_running()) {
-		d.LOG_CPU_ERROR("You're trying to boot while NetworkManager is running.\n"
-						"You should stop it before ( systemctl stop NetworkManager )\n"
-						"or use --force flag to ignore this warning.\n");
 		return false;
 	}
 
@@ -2415,7 +2400,7 @@ bool pwrbtn_boot(caller_data d)
 				img_path, strerror(errno));
 
 		if (!file_exists(actual_path)) {
-			d.LOG_CPU_ERROR("file %s does not exist!\n", actual_path);
+			d.LOG_CPU_ERROR("Can't access file %s!\n", actual_path);
 			return true;
 		}
 	}
@@ -2687,7 +2672,7 @@ bool update_img_file_with_mac(const char * mac)
 	fclose(fp);
 
 	if (!file_exists(VCA_UPDATE_MAC_IMG_PATH)) {
-		LOG_ERROR("File %s does not exist!\n", VCA_UPDATE_MAC_IMG_PATH);
+		LOG_ERROR("Can't access file %s!\n", VCA_UPDATE_MAC_IMG_PATH);
 		return false;
 	}
 
@@ -2717,7 +2702,7 @@ bool update_img_file_with_sn(const char * sn)
 	fprintf(fp, "%s", file_content.c_str());
 	fclose(fp);
 	if (!file_exists(VCA_SET_SERIAL_NR_IMG_PATH)) {
-		LOG_ERROR("File %s does not exist!\n", VCA_SET_SERIAL_NR_IMG_PATH);
+		LOG_ERROR("Can't access file %s!\n", VCA_SET_SERIAL_NR_IMG_PATH);
 		return false;
 	}
 
@@ -4603,7 +4588,7 @@ bool blockio_ctl_open(caller_data d)
 					file_path.c_str(), strerror(errno));
 			return false;
 		} else if (!file_exists(resolved_path)) {
-			d.LOG_CPU_ERROR("Wrong blockio type param! File (%s) doesn't exist.\n", resolved_path);
+			d.LOG_CPU_ERROR("Wrong blockio type param! Can't access file %s.\n", resolved_path);
 			return false;
 		} else if (!update_blk_config_fields(d, blk_dev_id, mode.c_str(), NULL, resolved_path)) {
 			d.LOG_CPU_ERROR("Cannot update config for block device %s\n",
@@ -4961,7 +4946,7 @@ parsing_output optional_blockio_type_param(const char *arg, args_holder &holder)
 	if (holder.get_arg(BLOCKIO_MODE_ARG) == BLOCKIO_MODE_RO ||
 	    holder.get_arg(BLOCKIO_MODE_ARG) == BLOCKIO_MODE_RW) {
 		if (!file_exists(arg)) {
-			LOG_ERROR("Wrong blockio type param! File (%s) doesn't exist.\n", arg);
+			LOG_ERROR("Wrong blockio type param! Can't access file %s.\n", arg);
 			return PARSING_FAILED;
 		}
 	}

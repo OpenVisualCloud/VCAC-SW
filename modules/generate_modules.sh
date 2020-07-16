@@ -25,7 +25,10 @@ function print_help {
 	echo 'Synopsis:'
 	echo 'OS={CENTOS|DEBIAN|UBUNTU} PKG_VER=<pkg version> [WORKSPACE=<intermediate and output dir>] [ VER_KERNEL=<kernel ver (without VCA subversion)> | LINUX_HEADERS_OR_KERNEL_DEVEL_PKG=<path of the src pkg>] ../ValleyVistaBuildScripts/quickbuild/generate_modules.sh'
 	echo '	where:'
-	echo '		LINUX_HEADERS_OR_KERNEL_DEVEL_PKG is the path of kernel-devel*VCA*.rpm (CentOS) or linux-headers*vca*.deb (Ubuntu).'
+	echo '		LINUX_HEADERS_OR_KERNEL_DEVEL_PKG is the path of kernel-devel*VCA*.rpm (CentOS) or can contain path(s) of linux-headers*vca*.deb (Ubuntu).'
+	echo '			Note that for Ubuntu it can contain blank-separated, shell-quoted list of paths'
+	echo '			(e.g.: "linux-headers-5.3.0-28_5.3.0-28.30~18.04.1_all.deb linux-headers-5.3.0-28-generic_5.3.0-28.30~18.04.1_amd64.deb")'
+	echo '			If it contains paths, linux-headers-* get extracted in order into a common directory, and the last of them provides information on kernel version and kernel source path for "make"'
 	echo '			The path is resolved from ValleyVistaModules/'
 	echo 'Examples:'
 	echo 'OS=UBUNTU PKG_VER=2.1.1 VER_KERNEL=4.4.0 ../ValleyVistaBuildScripts/quickbuild/generate_modules.sh'
@@ -72,10 +75,13 @@ function findMostRecentKernelDevel {
 
 function generate_modules_ubuntu {
 	# extract kernel header pkg:
-	dpkg -x "${LINUX_HEADERS_OR_KERNEL_DEVEL_PKG}" "${KERNEL_DEVEL}"
-	local DIR_NAME; DIR_NAME="$( ls "${KERNEL_DEVEL}"/usr/src )"
+	local _LINUX_HEADERS
+	for _LINUX_HEADERS in ${LINUX_HEADERS_OR_KERNEL_DEVEL_PKG}; do
+		dpkg -x "${_LINUX_HEADERS}" "${KERNEL_DEVEL}"
+	done
+	local DIR_NAME; DIR_NAME="$( ls "${KERNEL_DEVEL}"/usr/src | tail -1)"
 	local KER_VER="${DIR_NAME#linux-headers-}"
-	local KERNEL_SRC; KERNEL_SRC="$( ls -d "${KERNEL_DEVEL}"/usr/src/* )"
+	local KERNEL_SRC; KERNEL_SRC="$( ls -d "${KERNEL_DEVEL}"/usr/src/* | tail -1 )"
 
 	# generate tar.gz with full source
 	local _SRC_ARCHIVE_NAME=vcass-modules_"${KER_VER}_${PKG_VER}".tar.gz
@@ -145,8 +151,10 @@ else
 		die "Possibly wrong LINUX_HEADERS_OR_KERNEL_DEVEL_PKG (=${LINUX_HEADERS_OR_KERNEL_DEVEL_PKG}), most probably you want to use kernel-devel-*.rpm"
 	fi
 fi
-[ -f "${LINUX_HEADERS_OR_KERNEL_DEVEL_PKG}" ] || die "Kernel headers package file: '${LINUX_HEADERS_OR_KERNEL_DEVEL_PKG}' does not exist"
-echo "LINUX_HEADERS_OR_KERNEL_DEVEL_PKG: ${LINUX_HEADERS_OR_KERNEL_DEVEL_PKG}"
+for LINUX_HEADERS_OR_KERNEL_DEVEL_PKG_FILE in ${LINUX_HEADERS_OR_KERNEL_DEVEL_PKG} ; do
+	[ -f "${LINUX_HEADERS_OR_KERNEL_DEVEL_PKG_FILE}" ] || die "Kernel headers package file: '${LINUX_HEADERS_OR_KERNEL_DEVEL_PKG_FILE}' does not exist (from: '${LINUX_HEADERS_OR_KERNEL_DEVEL_PKG}')"
+	echo "LINUX_HEADERS_OR_KERNEL_DEVEL_PKG: ${LINUX_HEADERS_OR_KERNEL_DEVEL_PKG_FILE}"
+done
 case $OS in
 	"UBUNTU"|"DEBIAN")
 		generate_modules_ubuntu

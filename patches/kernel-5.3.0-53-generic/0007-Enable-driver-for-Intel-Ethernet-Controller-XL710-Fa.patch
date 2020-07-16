@@ -1,0 +1,27 @@
+From 5f2a30dd9f588fb14eb2c2cac1f560b8cb9a107f Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Thu, 16 Jul 2020 07:47:02 +0000
+Subject: [PATCH 7/7] Enable driver for Intel Ethernet Controller XL710 Family
+
+This is for hosts that lack ethernet interfaces on main board
+or that use the XL710-family PCI cards with ethernet interfaces for other purposes
+---
+ .config | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.config b/.config
+index 5ff662b0bc86..62daf65f70b3 100644
+--- a/.config
++++ b/.config
+@@ -1780,7 +1780,7 @@ CONFIG_E1000E_HWTS=y
+ # CONFIG_IXGB is not set
+ # CONFIG_IXGBE is not set
+ # CONFIG_IXGBEVF is not set
+-# CONFIG_I40E is not set
++CONFIG_I40E=y
+ # CONFIG_I40EVF is not set
+ # CONFIG_ICE is not set
+ # CONFIG_FM10K is not set
+-- 
+2.17.1
+
