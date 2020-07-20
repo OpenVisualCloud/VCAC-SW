@@ -1,7 +1,7 @@
 From 2d343377cca9271c5a1f0ba5a88b693fa1c2459e Mon Sep 17 00:00:00 2001
 From: Marcin Rysztowski <marcin.rysztowski@intel.com>
 Date: Tue, 24 Mar 2015 10:43:32 +0100
-Subject: [PATCH 1/6] Add compilation and linker flags required by SDL
+Subject: [PATCH 1/2] Add compilation and linker flags required by SDL
 
 ---
  Makefile | 8 ++++----
