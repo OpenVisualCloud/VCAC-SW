@@ -1,4 +1,19 @@
-Please find differences to default config in 3 commits below:
+Please find differences to default config below:
+
+commit ...
+Author Przemek Kitszel
+Date Fri Jul 31 2020
+
+	Enable CONFIG_OVERLAY_FS=m
+
+	Select other OVERLAY_FS params according to your needs, in our case it is:
+	CONFIG_OVERLAY_FS=m
+	CONFIG_OVERLAY_FS_REDIRECT_DIR=y
+	CONFIG_OVERLAY_FS_REDIRECT_ALWAYS_FOLLOW=y
+	+# CONFIG_OVERLAY_FS_INDEX is not set
+	+# CONFIG_OVERLAY_FS_XINO_AUTO is not set
+	CONFIG_OVERLAY_FS_METACOPY=y
+
 
 commit b123d3b9586856edb2e68c2234e8a924f5b3c82b
 Author: Artur Opalinski <ArturX.Opalinski@intel.com>
