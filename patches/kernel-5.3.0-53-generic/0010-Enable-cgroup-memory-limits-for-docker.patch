@@ -1,0 +1,29 @@
+From fbdaf3062479a0c3f121c02ff50044d97066d4fc Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Tue, 4 Aug 2020 09:29:32 +0000
+Subject: [PATCH 10/22] Enable cgroup memory limits for docker
+
+Also enabling cgroups limits for swap, which may not be necessary.
+---
+ .config | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/.config b/.config
+index aec5f8dcda99..ac078901e5a6 100644
+--- a/.config
++++ b/.config
+@@ -142,7 +142,10 @@ CONFIG_ARCH_SUPPORTS_INT128=y
+ # CONFIG_NUMA_BALANCING is not set
+ CONFIG_CGROUPS=y
+ CONFIG_PAGE_COUNTER=y
+-# CONFIG_MEMCG is not set
++CONFIG_MEMCG=y
++CONFIG_MEMCG_SWAP=y
++CONFIG_MEMCG_SWAP_ENABLED=y
++CONFIG_MEMCG_KMEM=y
+ # CONFIG_BLK_CGROUP is not set
+ CONFIG_CGROUP_SCHED=y
+ CONFIG_FAIR_GROUP_SCHED=y
+-- 
+2.17.1
+

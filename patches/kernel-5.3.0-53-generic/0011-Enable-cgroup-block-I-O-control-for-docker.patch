@@ -1,0 +1,51 @@
+From 890bfa5ffad7bd2b973ee37bae1b0f317faa3978 Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Tue, 4 Aug 2020 09:31:01 +0000
+Subject: [PATCH 11/22] Enable cgroup block I/O control for docker
+
+---
+ .config | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/.config b/.config
+index ac078901e5a6..072fc9d89209 100644
+--- a/.config
++++ b/.config
+@@ -146,7 +146,8 @@ CONFIG_MEMCG=y
+ CONFIG_MEMCG_SWAP=y
+ CONFIG_MEMCG_SWAP_ENABLED=y
+ CONFIG_MEMCG_KMEM=y
+-# CONFIG_BLK_CGROUP is not set
++CONFIG_BLK_CGROUP=y
++CONFIG_CGROUP_WRITEBACK=y
+ CONFIG_CGROUP_SCHED=y
+ CONFIG_FAIR_GROUP_SCHED=y
+ CONFIG_CFS_BANDWIDTH=y
+@@ -744,8 +745,12 @@ CONFIG_BLK_DEV_BSG=y
+ # CONFIG_BLK_DEV_BSGLIB is not set
+ # CONFIG_BLK_DEV_INTEGRITY is not set
+ # CONFIG_BLK_DEV_ZONED is not set
++CONFIG_BLK_DEV_THROTTLING=y
++CONFIG_BLK_DEV_THROTTLING_LOW=y
+ # CONFIG_BLK_CMDLINE_PARSER is not set
+-# CONFIG_BLK_WBT is not set
++CONFIG_BLK_WBT=y
++# CONFIG_BLK_CGROUP_IOLATENCY is not set
++CONFIG_BLK_WBT_MQ=y
+ CONFIG_BLK_DEBUG_FS=y
+ # CONFIG_BLK_SED_OPAL is not set
+ 
+@@ -766,7 +771,9 @@ CONFIG_BLK_PM=y
+ #
+ CONFIG_MQ_IOSCHED_DEADLINE=y
+ CONFIG_MQ_IOSCHED_KYBER=y
+-# CONFIG_IOSCHED_BFQ is not set
++CONFIG_IOSCHED_BFQ=m
++CONFIG_BFQ_GROUP_IOSCHED=y
++# CONFIG_BFQ_CGROUP_DEBUG is not set
+ # end of IO Schedulers
+ 
+ CONFIG_ASN1=y
+-- 
+2.17.1
+

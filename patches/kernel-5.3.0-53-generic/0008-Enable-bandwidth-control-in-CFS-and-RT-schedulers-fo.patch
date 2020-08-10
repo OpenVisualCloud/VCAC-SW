@@ -1,0 +1,30 @@
+From dd42f77cf47eff9c552bc8f11ec83b78cc416201 Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Mon, 3 Aug 2020 13:51:22 +0000
+Subject: [PATCH 08/22] Enable bandwidth control in CFS and RT schedulers for
+ docker
+
+CFS stands for 'Completely Fair Scheduler'. Bandwidth control is
+achieved by means of counting CPU usage in time periods.
+---
+ .config | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/.config b/.config
+index 3847352c34b5..2587e85f6091 100644
+--- a/.config
++++ b/.config
+@@ -145,8 +145,8 @@ CONFIG_CGROUPS=y
+ # CONFIG_BLK_CGROUP is not set
+ CONFIG_CGROUP_SCHED=y
+ CONFIG_FAIR_GROUP_SCHED=y
+-# CONFIG_CFS_BANDWIDTH is not set
+-# CONFIG_RT_GROUP_SCHED is not set
++CONFIG_CFS_BANDWIDTH=y
++CONFIG_RT_GROUP_SCHED=y
+ # CONFIG_CGROUP_PIDS is not set
+ # CONFIG_CGROUP_RDMA is not set
+ CONFIG_CGROUP_FREEZER=y
+-- 
+2.17.1
+

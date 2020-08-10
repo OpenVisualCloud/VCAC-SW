@@ -1,0 +1,41 @@
+From 2f8c3df558be5ba3b7ac78acff75fcdb7b9bd952 Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Tue, 4 Aug 2020 09:31:01 +0000
+Subject: [PATCH 19/22] Enable cgroup block I/O control for docker
+
+---
+ .config | 9 ++++++---
+ 1 file changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/.config b/.config
+index a0c4036ee261..f398904cb977 100644
+--- a/.config
++++ b/.config
+@@ -833,10 +833,11 @@ CONFIG_BLK_DEV_BSGLIB=y
+ CONFIG_BLK_DEV_INTEGRITY=y
+ # CONFIG_BLK_DEV_ZONED is not set
+ CONFIG_BLK_DEV_THROTTLING=y
+-# CONFIG_BLK_DEV_THROTTLING_LOW is not set
++CONFIG_BLK_DEV_THROTTLING_LOW=y
+ # CONFIG_BLK_CMDLINE_PARSER is not set
+-# CONFIG_BLK_WBT is not set
++CONFIG_BLK_WBT=y
+ # CONFIG_BLK_CGROUP_IOLATENCY is not set
++CONFIG_BLK_WBT_MQ=y
+ CONFIG_BLK_DEBUG_FS=y
+ # CONFIG_BLK_SED_OPAL is not set
+ 
+@@ -876,7 +877,9 @@ CONFIG_BLK_PM=y
+ #
+ CONFIG_MQ_IOSCHED_DEADLINE=y
+ CONFIG_MQ_IOSCHED_KYBER=y
+-# CONFIG_IOSCHED_BFQ is not set
++CONFIG_IOSCHED_BFQ=m
++CONFIG_BFQ_GROUP_IOSCHED=y
++# CONFIG_BFQ_CGROUP_DEBUG is not set
+ # end of IO Schedulers
+ 
+ CONFIG_PREEMPT_NOTIFIERS=y
+-- 
+2.17.1
+

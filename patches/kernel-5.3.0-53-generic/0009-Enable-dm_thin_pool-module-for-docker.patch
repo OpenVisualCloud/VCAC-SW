@@ -1,0 +1,65 @@
+From 53a64a45f90b310648cabf36de4b9c9243dfa332 Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Mon, 3 Aug 2020 14:09:16 +0000
+Subject: [PATCH 09/22] Enable dm_thin_pool module for docker
+
+The dm_thin_pool is used by logical volume manager through device-mapper driver
+---
+ .config | 13 +++++++++----
+ 1 file changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/.config b/.config
+index 2587e85f6091..aec5f8dcda99 100644
+--- a/.config
++++ b/.config
+@@ -141,6 +141,7 @@ CONFIG_ARCH_WANT_BATCHED_UNMAP_TLB_FLUSH=y
+ CONFIG_ARCH_SUPPORTS_INT128=y
+ # CONFIG_NUMA_BALANCING is not set
+ CONFIG_CGROUPS=y
++CONFIG_PAGE_COUNTER=y
+ # CONFIG_MEMCG is not set
+ # CONFIG_BLK_CGROUP is not set
+ CONFIG_CGROUP_SCHED=y
+@@ -150,12 +151,12 @@ CONFIG_RT_GROUP_SCHED=y
+ # CONFIG_CGROUP_PIDS is not set
+ # CONFIG_CGROUP_RDMA is not set
+ CONFIG_CGROUP_FREEZER=y
+-# CONFIG_CGROUP_HUGETLB is not set
++CONFIG_CGROUP_HUGETLB=y
+ CONFIG_CPUSETS=y
+ CONFIG_PROC_PID_CPUSET=y
+ # CONFIG_CGROUP_DEVICE is not set
+ CONFIG_CGROUP_CPUACCT=y
+-# CONFIG_CGROUP_PERF is not set
++CONFIG_CGROUP_PERF=y
+ # CONFIG_CGROUP_DEBUG is not set
+ CONFIG_NAMESPACES=y
+ CONFIG_UTS_NS=y
+@@ -1615,10 +1616,14 @@ CONFIG_MD_AUTODETECT=y
+ CONFIG_BLK_DEV_DM_BUILTIN=y
+ CONFIG_BLK_DEV_DM=y
+ # CONFIG_DM_DEBUG is not set
++CONFIG_DM_BUFIO=m
++# CONFIG_DM_DEBUG_BLOCK_MANAGER_LOCKING is not set
++CONFIG_DM_BIO_PRISON=m
++CONFIG_DM_PERSISTENT_DATA=m
+ # CONFIG_DM_UNSTRIPED is not set
+ # CONFIG_DM_CRYPT is not set
+ # CONFIG_DM_SNAPSHOT is not set
+-# CONFIG_DM_THIN_PROVISIONING is not set
++CONFIG_DM_THIN_PROVISIONING=m
+ # CONFIG_DM_CACHE is not set
+ # CONFIG_DM_WRITECACHE is not set
+ # CONFIG_DM_ERA is not set
+@@ -4430,7 +4435,7 @@ CONFIG_CRC32_SLICEBY8=y
+ # CONFIG_CRC64 is not set
+ # CONFIG_CRC4 is not set
+ # CONFIG_CRC7 is not set
+-# CONFIG_LIBCRC32C is not set
++CONFIG_LIBCRC32C=m
+ # CONFIG_CRC8 is not set
+ # CONFIG_RANDOM32_SELFTEST is not set
+ CONFIG_ZLIB_INFLATE=y
+-- 
+2.17.1
+

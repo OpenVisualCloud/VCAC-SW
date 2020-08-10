@@ -1,0 +1,25 @@
+From 4c9b981d565bbd3613361c83dc26f99449078220 Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Tue, 4 Aug 2020 10:57:50 +0000
+Subject: [PATCH 13/22] Enable cgroup pids for docker
+
+---
+ .config | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.config b/.config
+index 3350dfbc6d76..d50bf8bd5569 100644
+--- a/.config
++++ b/.config
+@@ -152,7 +152,7 @@ CONFIG_CGROUP_SCHED=y
+ CONFIG_FAIR_GROUP_SCHED=y
+ CONFIG_CFS_BANDWIDTH=y
+ CONFIG_RT_GROUP_SCHED=y
+-# CONFIG_CGROUP_PIDS is not set
++CONFIG_CGROUP_PIDS=y
+ # CONFIG_CGROUP_RDMA is not set
+ CONFIG_CGROUP_FREEZER=y
+ CONFIG_CGROUP_HUGETLB=y
+-- 
+2.17.1
+

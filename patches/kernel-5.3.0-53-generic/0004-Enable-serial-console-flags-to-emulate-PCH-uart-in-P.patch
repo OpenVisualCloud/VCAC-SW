@@ -1,0 +1,51 @@
+From 12289c1785795a5c8a9347888b6f2e1a41182c53 Mon Sep 17 00:00:00 2001
+From: Artur Opalinski <ArturX.Opalinski@intel.com>
+Date: Wed, 17 Jun 2020 12:01:20 +0200
+Subject: [PATCH 04/22] Enable serial console (flags to emulate PCH-uart in
+ PCH-SKL as legacy device 16550A)
+
+    CONFIG_SERIAL_8250_DW=y
+    CONFIG_MFD_CORE=y (to enable MFD_INTEL_LPSS below)
+    CONFIG_MFD_INTEL_LPSS=y (to enable MFD_INTEL_LPSS_PCI and MFD_INTEL_LPSS_ACPI below)
+    CONFIG_MFD_INTEL_LPSS_PCI=y
+    CONFIG_MFD_INTEL_LPSS_ACPI=y
+---
+ .config | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/.config b/.config
+index d2dbb87e009c..ff9bc0325c55 100644
+--- a/.config
++++ b/.config
+@@ -2296,7 +2296,7 @@ CONFIG_SERIAL_8250_MANY_PORTS=y
+ CONFIG_SERIAL_8250_SHARE_IRQ=y
+ CONFIG_SERIAL_8250_DETECT_IRQ=y
+ CONFIG_SERIAL_8250_RSA=y
+-# CONFIG_SERIAL_8250_DW is not set
++CONFIG_SERIAL_8250_DW=y
+ # CONFIG_SERIAL_8250_RT288X is not set
+ CONFIG_SERIAL_8250_LPSS=y
+ CONFIG_SERIAL_8250_MID=y
+@@ -2729,6 +2729,7 @@ CONFIG_BCMA_POSSIBLE=y
+ #
+ # Multifunction device drivers
+ #
++CONFIG_MFD_CORE=y
+ # CONFIG_MFD_AS3711 is not set
+ # CONFIG_PMIC_ADP5520 is not set
+ # CONFIG_MFD_BCM590XX is not set
+@@ -2748,8 +2749,9 @@ CONFIG_BCMA_POSSIBLE=y
+ # CONFIG_MFD_INTEL_QUARK_I2C_GPIO is not set
+ # CONFIG_LPC_ICH is not set
+ # CONFIG_LPC_SCH is not set
+-# CONFIG_MFD_INTEL_LPSS_ACPI is not set
+-# CONFIG_MFD_INTEL_LPSS_PCI is not set
++CONFIG_MFD_INTEL_LPSS=y
++CONFIG_MFD_INTEL_LPSS_ACPI=y
++CONFIG_MFD_INTEL_LPSS_PCI=y
+ # CONFIG_MFD_JANZ_CMODIO is not set
+ # CONFIG_MFD_KEMPLD is not set
+ # CONFIG_MFD_88PM800 is not set
+-- 
+2.17.1
+
