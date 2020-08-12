@@ -1,7 +1,7 @@
 From a17979a228fdcd5b01afd22415da7c954f6488ad Mon Sep 17 00:00:00 2001
 From: Bartosz <bartoszx.niemczewski@intel.com>
 Date: Tue, 24 Oct 2017 09:51:53 -0400
-Subject: [PATCH 02/22] Add pkg version to kernel name
+Subject: [PATCH 02/17] Add pkg version to kernel name
 
 Signed-off-by: Bartosz <bartoszx.niemczewski@intel.com>
 Signed-off-by: Bartosz Niemczewski <bartoszx.niemczewski@intel.com>

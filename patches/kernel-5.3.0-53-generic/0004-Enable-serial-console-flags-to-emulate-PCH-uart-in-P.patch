@@ -1,7 +1,7 @@
 From 12289c1785795a5c8a9347888b6f2e1a41182c53 Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Wed, 17 Jun 2020 12:01:20 +0200
-Subject: [PATCH 04/22] Enable serial console (flags to emulate PCH-uart in
+Subject: [PATCH 04/17] Enable serial console (flags to emulate PCH-uart in
  PCH-SKL as legacy device 16550A)
 
     CONFIG_SERIAL_8250_DW=y

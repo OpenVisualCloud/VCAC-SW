@@ -1,7 +1,7 @@
 From b123d3b9586856edb2e68c2234e8a924f5b3c82b Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Fri, 10 Jul 2020 11:09:53 +0200
-Subject: [PATCH 06/22] Enable coretemp kernel driver
+Subject: [PATCH 06/17] Enable coretemp kernel driver
 
 Required for Linux command 'sensors coretemp-isa-0000' (from lm-sensors package)
 Required for 'vcactl temp'

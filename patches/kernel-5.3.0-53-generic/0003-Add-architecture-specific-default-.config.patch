@@ -1,7 +1,7 @@
 From b52bc30ffd7a2c330243e1c1a94b951e5bb1f2f6 Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Mon, 8 Jun 2020 14:16:16 +0000
-Subject: [PATCH 03/22] Add architecture-specific default .config
+Subject: [PATCH 03/17] Add architecture-specific default .config
 
 ---
  .config | 4690 +++++++++++++++++++++++++++++++++++++++++++++++++++++++

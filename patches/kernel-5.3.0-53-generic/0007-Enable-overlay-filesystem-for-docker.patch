@@ -1,7 +1,7 @@
 From 489946d8f0e779d8ea79eac91a1aae350dec977b Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Mon, 3 Aug 2020 11:37:20 +0000
-Subject: [PATCH 07/22] Enable overlay filesystem for docker
+Subject: [PATCH 07/17] Enable overlay filesystem for docker
 
 Set CONFIG_OVERLAY_FS=m
 Select other OVERLAY_FS params according to your needs, in our case it is:

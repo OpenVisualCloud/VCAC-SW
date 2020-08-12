@@ -1,7 +1,7 @@
 From 53a64a45f90b310648cabf36de4b9c9243dfa332 Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Mon, 3 Aug 2020 14:09:16 +0000
-Subject: [PATCH 09/22] Enable dm_thin_pool module for docker
+Subject: [PATCH 09/17] Enable dm_thin_pool module for docker
 
 The dm_thin_pool is used by logical volume manager through device-mapper driver
 ---

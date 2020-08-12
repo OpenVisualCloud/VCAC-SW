@@ -1,7 +1,7 @@
 From 2599ee2556775c2d41ec56c96f102be68d4c7014 Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Thu, 6 Aug 2020 12:47:21 +0000
-Subject: [PATCH 16/22] Enable ethernet bridge firewalling and multimedia
+Subject: [PATCH 16/17] Enable ethernet bridge firewalling and multimedia
 
 This is based on an e-mail suggestion, and may net be actually needed
 ---

@@ -1,7 +1,7 @@
 From dd42f77cf47eff9c552bc8f11ec83b78cc416201 Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Mon, 3 Aug 2020 13:51:22 +0000
-Subject: [PATCH 08/22] Enable bandwidth control in CFS and RT schedulers for
+Subject: [PATCH 08/17] Enable bandwidth control in CFS and RT schedulers for
  docker
 
 CFS stands for 'Completely Fair Scheduler'. Bandwidth control is

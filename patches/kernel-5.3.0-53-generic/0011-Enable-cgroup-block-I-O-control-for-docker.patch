@@ -1,7 +1,7 @@
 From 890bfa5ffad7bd2b973ee37bae1b0f317faa3978 Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Tue, 4 Aug 2020 09:31:01 +0000
-Subject: [PATCH 11/22] Enable cgroup block I/O control for docker
+Subject: [PATCH 11/17] Enable cgroup block I/O control for docker
 
 ---
  .config | 13 ++++++++++---

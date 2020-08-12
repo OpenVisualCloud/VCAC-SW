@@ -1,7 +1,7 @@
 From fbdaf3062479a0c3f121c02ff50044d97066d4fc Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Tue, 4 Aug 2020 09:29:32 +0000
-Subject: [PATCH 10/22] Enable cgroup memory limits for docker
+Subject: [PATCH 10/17] Enable cgroup memory limits for docker
 
 Also enabling cgroups limits for swap, which may not be necessary.
 ---

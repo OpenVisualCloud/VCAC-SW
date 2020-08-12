@@ -1,7 +1,7 @@
 From 8d26124cdac196c7adb43b8d69c3aa158e87fbb1 Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Tue, 4 Aug 2020 11:02:10 +0000
-Subject: [PATCH 14/22] Enable network settings and ethernet bridge module for
+Subject: [PATCH 14/17] Enable network settings and ethernet bridge module for
  docker
 
 ---

@@ -1,7 +1,7 @@
 From 9fd0dd78894fe567f3b3a02ad533e36bb3ad29f4 Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Wed, 10 Jun 2020 09:53:01 +0000
-Subject: [PATCH 05/22] Build EXT4, LOOP, NFS, NFSV3, NFSV4, PL2303 as modules
+Subject: [PATCH 05/17] Build EXT4, LOOP, NFS, NFSV3, NFSV4, PL2303 as modules
 
 Current methd of building&booting images requires this
 ---

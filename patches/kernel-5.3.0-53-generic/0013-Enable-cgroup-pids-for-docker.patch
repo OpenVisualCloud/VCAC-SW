@@ -1,7 +1,7 @@
 From 4c9b981d565bbd3613361c83dc26f99449078220 Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Tue, 4 Aug 2020 10:57:50 +0000
-Subject: [PATCH 13/22] Enable cgroup pids for docker
+Subject: [PATCH 13/17] Enable cgroup pids for docker
 
 ---
  .config | 2 +-

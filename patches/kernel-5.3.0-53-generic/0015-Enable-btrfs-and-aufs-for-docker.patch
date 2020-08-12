@@ -1,7 +1,7 @@
 From 7be26b0510ab35b567e156fef644d998bceaeadc Mon Sep 17 00:00:00 2001
 From: Artur Opalinski <ArturX.Opalinski@intel.com>
 Date: Tue, 4 Aug 2020 13:14:48 +0000
-Subject: [PATCH 15/22] Enable btrfs and aufs for docker
+Subject: [PATCH 15/17] Enable btrfs and aufs for docker
 
 ---
  .config | 31 +++++++++++++++++++++++++++++--
