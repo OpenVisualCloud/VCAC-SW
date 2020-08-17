@@ -1,0 +1,88 @@
+From 0beabb05dbd208fd6399d196a92e33861c7466be Mon Sep 17 00:00:00 2001
+From: Karol Maslowski <karol.maslowski@intel.com>
+Date: Mon, 17 Aug 2020 10:55:59 +0000
+Subject: [PATCH 18/18] Added CONFIG_IP_VS* options
+
+---
+ .config | 52 ++++++++++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 50 insertions(+), 2 deletions(-)
+
+diff --git a/.config b/.config
+index 420e6b5de79d..e80fb0724bb2 100644
+--- a/.config
++++ b/.config
+@@ -1,6 +1,6 @@
+ #
+ # Automatically generated file; DO NOT EDIT.
+-# Linux/x86 5.3.18-1.1.0.0.vca Kernel Configuration
++# Linux/x86 5.3.18-1.1.0.1.vca Kernel Configuration
+ #
+ 
+ #
+@@ -1052,6 +1052,7 @@ CONFIG_NETFILTER_XT_MATCH_CONNTRACK=y
+ # CONFIG_NETFILTER_XT_MATCH_HL is not set
+ # CONFIG_NETFILTER_XT_MATCH_IPCOMP is not set
+ # CONFIG_NETFILTER_XT_MATCH_IPRANGE is not set
++CONFIG_NETFILTER_XT_MATCH_IPVS=m
+ # CONFIG_NETFILTER_XT_MATCH_L2TP is not set
+ # CONFIG_NETFILTER_XT_MATCH_LENGTH is not set
+ # CONFIG_NETFILTER_XT_MATCH_LIMIT is not set
+@@ -1079,7 +1080,54 @@ CONFIG_NETFILTER_XT_MATCH_STATE=y
+ # end of Core Netfilter Configuration
+ 
+ # CONFIG_IP_SET is not set
+-# CONFIG_IP_VS is not set
++CONFIG_IP_VS=m
++CONFIG_IP_VS_IPV6=y
++CONFIG_IP_VS_DEBUG=y
++CONFIG_IP_VS_TAB_BITS=12
++
++#
++# IPVS transport protocol load balancing support
++#
++CONFIG_IP_VS_PROTO_TCP=y
++CONFIG_IP_VS_PROTO_UDP=y
++CONFIG_IP_VS_PROTO_AH_ESP=y
++CONFIG_IP_VS_PROTO_ESP=y
++CONFIG_IP_VS_PROTO_AH=y
++CONFIG_IP_VS_PROTO_SCTP=y
++
++#
++# IPVS scheduler
++#
++CONFIG_IP_VS_RR=m
++CONFIG_IP_VS_WRR=m
++CONFIG_IP_VS_LC=m
++CONFIG_IP_VS_WLC=m
++CONFIG_IP_VS_FO=m
++CONFIG_IP_VS_OVF=m
++CONFIG_IP_VS_LBLC=m
++CONFIG_IP_VS_LBLCR=m
++CONFIG_IP_VS_DH=m
++CONFIG_IP_VS_SH=m
++CONFIG_IP_VS_MH=m
++CONFIG_IP_VS_SED=m
++CONFIG_IP_VS_NQ=m
++
++#
++# IPVS SH scheduler
++#
++CONFIG_IP_VS_SH_TAB_BITS=8
++
++#
++# IPVS MH scheduler
++#
++CONFIG_IP_VS_MH_TAB_INDEX=12
++
++#
++# IPVS application helper
++#
++CONFIG_IP_VS_FTP=m
++CONFIG_IP_VS_NFCT=y
++CONFIG_IP_VS_PE_SIP=m
+ 
+ #
+ # IP: Netfilter Configuration
+-- 
+2.17.1
+
